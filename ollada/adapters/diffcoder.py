@@ -13,6 +13,15 @@ and steps % (gen_length // block_length) == 0 (recipe defaults satisfy both:
 256 % 4 == 0, 128 % 64 == 0). Batch size must be 1.
 
 The model's config was saved with transformers 5.3.0 — see the recipe pin.
+
+Load repairs applied by this adapter:
+1. generate_block builds its block-causal mask with dtype=torch.bfloat16
+   hardcoded, while the recipe loads fp16 on pre-Ampere GPUs (T4) —
+   transformers 5.x SDPA rejects a float mask whose dtype differs from the
+   query dtype (RuntimeError, T4 run 2026-10-21). The adapter wraps
+   _make_block_causal_mask so the mask follows the model's dtype. The mask
+   is additive (0 / -inf), so fp16 loses nothing.
+
 UNVERIFIED in ollada until a real-load gate passes on a T4.
 """
 
@@ -28,15 +37,35 @@ from ollada.adapters.base import BaseAdapter, quantization_config
 _DTYPES = {"float16": torch.float16, "bfloat16": torch.bfloat16}
 
 
+def _align_mask_dtype(model) -> bool:
+    """Wrap _make_block_causal_mask so its output dtype follows the model.
+
+    Returns True when the wrapper was installed. See the module docstring
+    (repair 1) for why this exists.
+    """
+    orig = getattr(model, "_make_block_causal_mask", None)
+    if orig is None:
+        return False
+    target = model.dtype
+
+    def patched(*args, **kwargs):
+        kwargs["dtype"] = target
+        return orig(*args, **kwargs)
+
+    model._make_block_causal_mask = patched
+    return True
+
+
 class DiffCoderAdapter(BaseAdapter):
     family = "diffcoder"
 
     def load(self) -> None:
         recipe = self.recipe
+        notes: list[str] = []
         self.tokenizer = AutoTokenizer.from_pretrained(recipe.source, trust_remote_code=True)
         kwargs = {
             "trust_remote_code": True,
-            "torch_dtype": _DTYPES.get(recipe.dtype, torch.float16),
+            "dtype": _DTYPES.get(recipe.dtype, torch.float16),
         }
         qc = quantization_config(recipe.quant_default)
         if qc is not None:
@@ -46,6 +75,9 @@ class DiffCoderAdapter(BaseAdapter):
         if qc is None and torch.cuda.is_available():
             self.model = self.model.cuda()
         self.model.eval()
+        if _align_mask_dtype(self.model):
+            notes.append(f"block mask dtype aligned to model dtype ({self.model.dtype})")
+        self.load_notes = notes
 
     @torch.no_grad()
     def chat(self, messages, overrides=None):

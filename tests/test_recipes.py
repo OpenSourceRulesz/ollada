@@ -90,3 +90,48 @@ def test_prompt_ids_unwraps_mapping_style_batch_encoding():
     adapter = object.__new__(BaseAdapter)
     adapter.tokenizer = FakeTokenizer()
     assert adapter._prompt_ids([{"role": "user", "content": "hi"}]) == [[1, 2, 3]]
+
+
+
+def test_diffcoder_mask_dtype_alignment_wrapper():
+    """Repair 1: the wrapper must force the model's dtype into mask calls.
+
+    Runs in the torch-free dev venv via minimal module stubs (the adapter
+    module imports torch/transformers at module level).
+    """
+    import sys
+    import types
+
+    torch_stub = types.ModuleType("torch")
+    torch_stub.float16 = "fp16"
+    torch_stub.bfloat16 = "bf16"
+    torch_stub.no_grad = lambda: (lambda f: f)
+    torch_stub.cuda = types.SimpleNamespace(is_available=lambda: False)
+    transformers_stub = types.ModuleType("transformers")
+    transformers_stub.AutoModelForCausalLM = object
+    transformers_stub.AutoTokenizer = object
+    transformers_stub.BitsAndBytesConfig = object
+    saved = {k: sys.modules.get(k) for k in ("torch", "transformers")}
+    sys.modules["torch"] = torch_stub
+    sys.modules["transformers"] = transformers_stub
+    try:
+        sys.modules.pop("ollada.adapters.diffcoder", None)
+        from ollada.adapters.diffcoder import _align_mask_dtype
+
+        class FakeModel:
+            dtype = "fp16"
+
+            def _make_block_causal_mask(self, seq_len, block_size=2, device=None, dtype="bf16"):
+                return dtype
+
+        model = FakeModel()
+        assert _align_mask_dtype(model) is True
+        # generate_block passes dtype=bf16 explicitly — must be overridden:
+        assert model._make_block_causal_mask(8, 4, None, dtype="bf16") == "fp16"
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                sys.modules.pop(k, None)
+            else:
+                sys.modules[k] = v
+        sys.modules.pop("ollada.adapters.diffcoder", None)
