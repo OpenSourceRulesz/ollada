@@ -1,0 +1,29 @@
+# ollada Recipe (schema v1) — sdar:4b
+# Defaults below are PROVISIONAL until the verification block is filled by a
+# real-load run (see PLAN.md §7). Never publish vendor numbers as verified.
+name: sdar:4b
+family: sdar
+source: JetLM/SDAR-4B-Chat
+license: Apache-2.0
+task: chat
+description: SDAR 4B — Qwen3-4B converted to block diffusion; strongest per-size diffusion generalist in its paper (MMLU 74.9 / GSM8K 89.9, diffusion mode).
+size_gb_bf16: 8.8
+quant_default: bf16        # fits 16GB cards whole; int8 optional for 8GB cards
+dtype: float16             # T4-safe (weights are bf16; fp16 load per the reference script's default)
+env:
+  transformers: ">=4.52.4" # satisfied by the shared 4.53.3 pin — same env as dream (PLAN.md §5 decision record)
+  extras: [torch, accelerate]
+generate:
+  gen_length: 256
+  block_length: 4          # reference config: block 4, 4 denoising steps
+  denoising_steps: 4
+  remasking: low_confidence_dynamic
+  confidence_threshold: 0.9
+  temperature: 1.0
+  top_p: 1.0
+  top_k: 0
+verified:
+  hardware: null
+  tokens_per_sec: null
+  vram_gb: null
+  date: null

@@ -14,7 +14,15 @@ def create_adapter(recipe: Recipe) -> BaseAdapter:
         from ollada.adapters.dream import DreamAdapter
 
         return DreamAdapter(recipe)
+    if recipe.family == "sdar":
+        from ollada.adapters.sdar import SdarAdapter
+
+        return SdarAdapter(recipe)
     if recipe.family == "nemotron":
+        # Dormant: Nemotron is the first planned post-v0.1 addition. Its
+        # adapter stays in the tree; it joins the shelf (catalog) later,
+        # together with the isolated-worker build its transformers>=5
+        # requirement forces (PLAN.md section 5, decision record).
         from ollada.adapters.nemotron import NemotronAdapter
 
         return NemotronAdapter(recipe)

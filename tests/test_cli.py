@@ -12,14 +12,14 @@ def test_version(capsys):
 def test_list_shows_the_shelf(capsys):
     assert main(["list"]) == 0
     out = capsys.readouterr().out
-    for name in ("dream:7b", "nemotron:3b", "diffcoder:8b"):
+    for name in ("dream:7b", "sdar:4b", "diffcoder:8b"):
         assert name in out
 
 
 def test_show_prints_recipe_and_honest_verification_state(capsys):
-    assert main(["show", "nemotron:3b"]) == 0
+    assert main(["show", "sdar:4b"]) == 0
     out = capsys.readouterr().out
-    assert "nvidia/Nemotron-Labs-Diffusion-3B" in out
+    assert "JetLM/SDAR-4B-Chat" in out
     assert "provisional" in out
 
 

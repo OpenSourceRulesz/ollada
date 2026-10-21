@@ -2,7 +2,7 @@ import pytest
 
 from ollada.recipes import RecipeError, get_recipe, load_catalog, validate_recipe
 
-EXPECTED_SHELF = {"dream:7b", "nemotron:3b", "diffcoder:8b"}
+EXPECTED_SHELF = {"dream:7b", "sdar:4b", "diffcoder:8b"}
 
 
 def test_shelf_has_exactly_the_three_mvp_models():

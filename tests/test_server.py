@@ -41,7 +41,7 @@ def client(monkeypatch):
 def test_health_and_tags(client):
     assert client.get("/health").json()["status"] == "ok"
     names = {m["name"] for m in client.get("/api/tags").json()["models"]}
-    assert names == {"dream:7b", "nemotron:3b", "diffcoder:8b"}
+    assert names == {"dream:7b", "sdar:4b", "diffcoder:8b"}
 
 
 def test_ollama_shaped_chat(client):
@@ -58,7 +58,7 @@ def test_ollama_shaped_chat(client):
 def test_openai_shaped_chat(client):
     resp = client.post(
         "/v1/chat/completions",
-        json={"model": "nemotron:3b", "messages": [{"role": "user", "content": "yo"}]},
+        json={"model": "sdar:4b", "messages": [{"role": "user", "content": "yo"}]},
     )
     assert resp.status_code == 200
     assert resp.json()["choices"][0]["message"]["content"] == "echo: yo"
