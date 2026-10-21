@@ -69,12 +69,18 @@ class BaseAdapter:
 
     def _prompt_ids(self, messages: list[dict]):
         """Tokenize a chat history, preferring the tokenizer's chat template."""
+        from collections.abc import Mapping
+
         tok = self.tokenizer
         if getattr(tok, "chat_template", None):
             result = tok.apply_chat_template(
                 messages, tokenize=True, add_generation_prompt=True, return_tensors="pt"
             )
-            if isinstance(result, dict):  # BatchEncoding (newer transformers style)
+            # BatchEncoding is a dict subclass on transformers 4.x but a
+            # UserDict (Mapping, NOT a dict) on 5.x — an isinstance(dict)
+            # check silently passes it through whole on 5.x, and the model's
+            # generate then dies on `.shape` (DiffCoder T4 run, 2026-10-21).
+            if isinstance(result, Mapping):
                 result = result["input_ids"]
             return result
         text = ""

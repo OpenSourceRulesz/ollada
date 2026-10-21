@@ -69,3 +69,24 @@ def test_validate_rejects_missing_fields_and_bad_names():
     }
     with pytest.raises(RecipeError):
         validate_recipe(bad)
+
+
+def test_prompt_ids_unwraps_mapping_style_batch_encoding():
+    """transformers 5.x BatchEncoding is a UserDict (Mapping), not a dict —
+    _prompt_ids must still unwrap it to the raw ids (DiffCoder regression)."""
+    from collections import UserDict
+
+    from ollada.adapters.base import BaseAdapter
+
+    class FakeEncoding(UserDict):
+        pass
+
+    class FakeTokenizer:
+        chat_template = "fake"
+
+        def apply_chat_template(self, messages, tokenize, add_generation_prompt, return_tensors):
+            return FakeEncoding({"input_ids": [[1, 2, 3]]})
+
+    adapter = object.__new__(BaseAdapter)
+    adapter.tokenizer = FakeTokenizer()
+    assert adapter._prompt_ids([{"role": "user", "content": "hi"}]) == [[1, 2, 3]]
