@@ -40,7 +40,7 @@ def test_family_env_pins_match_their_custom_code():
     assert by_name["diffcoder:8b"].generate["threshold"] is None
     # SDAR and Dream share the 4.53.3-era environment.
     assert by_name["dream:7b"].env["transformers"] == "==4.53.3"
-    assert by_name["sdar:4b"].env["transformers"] == ">=4.52.4"
+    assert by_name["sdar:4b"].env["transformers"] == ">=4.57"
 
 
 def test_get_recipe_roundtrip_and_unknown_model():

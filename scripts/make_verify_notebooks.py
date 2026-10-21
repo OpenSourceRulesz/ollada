@@ -36,8 +36,8 @@ SPECS = [
         "model": "sdar:4b",
         "version": "0.1.0",
         "subject": "SDAR-4B-Chat (bf16 weights, fp16 load)",
-        "pin_comment": "same env as Dream: transformers 4.53.3 satisfies SDAR's >=4.52.4",
-        "pkgs": ["transformers==4.53.3", "torch", "accelerate", "pyyaml"],
+        "pin_comment": "SDAR needs transformers>=4.57 (its modeling imports TransformersKwargs, added in 4.57) — its README's >=4.52.4 claim is stale; the adapter repairs its flash_attn requirement, missing HF file, and BlockMask-only attention at load",
+        "pkgs": ["transformers==4.57.0", "torch", "accelerate", "pyyaml"],
         "prompt_note": "same 4 as dream:7b for comparability, + an instruction-following probe",
         "prompts": DREAM_PROMPTS
         + ["Reply with exactly one word: what is the capital of France?"],
