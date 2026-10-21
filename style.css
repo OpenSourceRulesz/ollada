@@ -6,7 +6,7 @@ a { color:var(--ink); }
 .wrap { max-width:880px; margin:0 auto; padding:0 20px; }
 header { border-bottom:1px solid var(--line); }
 .nav { display:flex; align-items:center; gap:12px; padding:14px 0; }
-.nav img { width:34px; height:34px; }
+.nav img { width:40px; height:40px; display:block; }
 .nav .brand { font-weight:700; font-size:20px; text-decoration:none; }
 .nav nav { margin-left:auto; display:flex; gap:18px; }
 .nav nav a { text-decoration:none; color:var(--mut); font-size:15px; }
