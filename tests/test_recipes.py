@@ -29,8 +29,10 @@ def test_verification_state_matches_the_record():
     assert sdar.is_verified is True
     assert "T4" in sdar.verified["hardware"]
     assert sdar.verified["vram_gb"] == 8.87
-    # The rest of the shelf has not had a real-load run yet — no claiming.
-    assert by_name["diffcoder:8b"].is_verified is False
+    # diffcoder:8b earned verification on a real T4 run, 2026-10-21 (notebook v0.1.1).
+    diffcoder = by_name["diffcoder:8b"]
+    assert diffcoder.is_verified is True
+    assert diffcoder.verified["vram_gb"] == 15.15
 
 
 def test_family_env_pins_match_their_custom_code():

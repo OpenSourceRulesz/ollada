@@ -21,7 +21,9 @@ generate:
   temperature: 0.0
   threshold: null          # vendor example passes None (fixed transfer schedule); generate_block's own default is 0.95
 verified:
-  hardware: null
-  tokens_per_sec: null
-  vram_gb: null
-  date: null
+  hardware: "Tesla T4 (Colab)"
+  tokens_per_sec: 6.7      # steady-state across the coding prompt set (range 6.2-6.7 canvas tok/s at steps=128)
+  vram_gb: 15.15           # peak during load + generation — the T4's 15.6GB is this recipe's FLOOR; ~0.5GB headroom only
+  load_seconds: 89.5
+  date: "2026-10-21"
+  notes: "Verified WITH ollada's mask-dtype repair active (their generate_block hardcodes a bf16 mask; fp16-on-T4 needs it aligned — see adapters/diffcoder.py). Quality at recipe defaults: bug-fix prompt excellent (both planted bugs correctly diagnosed, corrected code right); palindrome code correct and clean but ignored the 'only output code' instruction (preamble + explanation added); Fibonacci correct in approach but the 256-token canvas ran out mid-function after a chatty preamble and long docstring; hash-map answer exact. Pattern: the CODE is clean where it lands; the surrounding prose shows occasional diffusion grammar artifacts ('accumulatinging', 'two couple of issues'). Speed is steps-bound (128 steps / 256 canvas) — a steps sweep is the Phase 2 lever."

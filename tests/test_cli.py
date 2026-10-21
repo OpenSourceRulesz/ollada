@@ -21,9 +21,9 @@ def test_show_prints_recipe_and_honest_verification_state(capsys):
     out = capsys.readouterr().out
     assert "JetLM/SDAR-4B-Chat" in out
     assert "Tesla T4" in out  # sdar:4b verified on T4, 2026-10-21
-    # ...while an unverified model still says provisional:
+    # the whole v0.1 shelf is verified as of 2026-10-21:
     assert main(["show", "diffcoder:8b"]) == 0
-    assert "provisional" in capsys.readouterr().out
+    assert "Tesla T4" in capsys.readouterr().out
 
 
 def test_show_unknown_model_is_a_clean_error(capsys):
