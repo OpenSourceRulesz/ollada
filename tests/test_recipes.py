@@ -10,13 +10,23 @@ def test_shelf_has_exactly_the_three_mvp_models():
     assert names == EXPECTED_SHELF
 
 
-def test_every_recipe_is_wellformed_and_unverified_until_a_real_run():
+def test_every_recipe_is_wellformed():
     for recipe in load_catalog():
         assert recipe.source.count("/") == 1  # owner/model on HF
         assert recipe.size_gb_bf16 > 0
         assert recipe.generate  # non-empty defaults
-        # Nothing may claim verification before a real-load run fills it in.
-        assert recipe.is_verified is False
+
+
+def test_verification_state_matches_the_record():
+    by_name = {r.name: r for r in load_catalog()}
+    # dream:7b earned verification on a real T4 run, 2026-10-21 (notebook v0.1.0).
+    dream = by_name["dream:7b"]
+    assert dream.is_verified is True
+    assert "T4" in dream.verified["hardware"]
+    assert dream.verified["vram_gb"] == 9.80
+    # The rest of the shelf has not had a real-load run yet — no claiming.
+    assert by_name["sdar:4b"].is_verified is False
+    assert by_name["diffcoder:8b"].is_verified is False
 
 
 def test_get_recipe_roundtrip_and_unknown_model():

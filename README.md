@@ -19,7 +19,11 @@ ollada serve   # local API on http://localhost:11435
 
 ## Status
 
-**In development (Phase 1).** The runtime core is built: recipe catalog, family adapters (Dream / Nemotron / DiffCoder), a one-model-at-a-time manager, Ollama-shaped + OpenAI-shaped APIs, and the `list / show / pull / run / serve / ps` CLI — 12 unit tests passing. **No model is verified yet**: a model joins the shelf for real only after a real-load run on GPU hardware fills in its recipe's verification block (see [PLAN.md](PLAN.md) §7). First up: `dream:7b` on a Colab T4.
+**In development (Phase 1).** The runtime core is built: recipe catalog, family adapters (Dream / SDAR / DiffCoder; Nemotron dormant), a one-model-at-a-time manager, Ollama-shaped + OpenAI-shaped APIs, and the `list / show / pull / run / serve / ps` CLI.
+
+**Verified shelf (real-load runs, our numbers — see [PLAN.md](PLAN.md) §7):**
+- ✅ `dream:7b` — Tesla T4 (Colab), 2026-10-21: peak VRAM 9.80GB, ~28 canvas tok/s steady-state at the recipe defaults. Quality notes live in its recipe.
+- ⏳ `sdar:4b`, `diffcoder:8b` — adapters written, verification runs pending.
 
 The first shelf: `dream:7b` (general flagship) · `sdar:4b` (general, strongest per-size) · `diffcoder:8b` (coding). First planned addition after v0.1: `nemotron:3b` (NVIDIA) — its adapter is already in the tree; it joins the shelf together with the isolated-worker build its `transformers>=5` requirement forces (see PLAN.md §5 decision record).
 

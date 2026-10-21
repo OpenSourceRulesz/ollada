@@ -20,7 +20,9 @@ generate:
   temperature: 0.2
   remasking: low_confidence
 verified:
-  hardware: null
-  tokens_per_sec: null
-  vram_gb: null
-  date: null
+  hardware: "Tesla T4 (Colab)"
+  tokens_per_sec: 28.0     # steady-state canvas tok/s (runs: 19.4 first/warmup, 28.3, 28.0, 27.9)
+  vram_gb: 9.80            # peak during load + generation — so ~10GB is the practical floor at these defaults; 8GB cards will not fit dream:7b as-is
+  load_seconds: 249.1      # includes the first-time ~15GB weight download in Colab; cached loads are a separate (unmeasured) number
+  date: "2026-10-21"
+  notes: "Quality at steps=32: short factual + math answers good (train-speed problem correct with steps); code output can garble mid-block and long list answers can truncate early — see PLAN.md Phase 2 steps sweep. Coding slot belongs to diffcoder:8b."
