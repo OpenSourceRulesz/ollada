@@ -27,7 +27,8 @@ ollada serve   # local API on http://localhost:11435
 
 **Verified shelf (real-load runs, our numbers — see [PLAN.md](PLAN.md) §7):**
 - ✅ `dream:7b` — Tesla T4 (Colab), 2026-10-21: peak VRAM 9.80GB, ~28 canvas tok/s steady-state at the recipe defaults. Quality notes live in its recipe.
-- ⏳ `sdar:4b`, `diffcoder:8b` — adapters written, verification runs pending.
+- ✅ `sdar:4b` — Tesla T4 (Colab, High-RAM runtime), 2026-10-21: peak VRAM 8.87GB, ~12 canvas tok/s at the recipe defaults, clean quality across the fixed prompt set (correct math, runnable code, complete lists, exact one-word instruction following). Verified with ollada's load repairs active — its upstream packaging needs five of them; see the adapter.
+- ⏳ `diffcoder:8b` — adapter written, verification run pending.
 
 The first shelf: `dream:7b` (general flagship) · `sdar:4b` (general, strongest per-size) · `diffcoder:8b` (coding). First planned addition after v0.1: `nemotron:3b` (NVIDIA) — its adapter is already in the tree; it joins the shelf together with the isolated-worker build its `transformers>=5` requirement forces (see PLAN.md §5 decision record).
 

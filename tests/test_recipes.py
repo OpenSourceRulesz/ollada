@@ -24,8 +24,12 @@ def test_verification_state_matches_the_record():
     assert dream.is_verified is True
     assert "T4" in dream.verified["hardware"]
     assert dream.verified["vram_gb"] == 9.80
+    # sdar:4b earned verification on a real T4 run, 2026-10-21 (notebook v0.1.1).
+    sdar = by_name["sdar:4b"]
+    assert sdar.is_verified is True
+    assert "T4" in sdar.verified["hardware"]
+    assert sdar.verified["vram_gb"] == 8.87
     # The rest of the shelf has not had a real-load run yet — no claiming.
-    assert by_name["sdar:4b"].is_verified is False
     assert by_name["diffcoder:8b"].is_verified is False
 
 
