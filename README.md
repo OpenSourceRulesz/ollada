@@ -26,7 +26,7 @@ ollada serve   # local API on http://localhost:11435
 **In development (Phase 1).** The runtime core is built: recipe catalog, family adapters (Dream / SDAR / DiffCoder; Nemotron dormant), a one-model-at-a-time manager, Ollama-shaped + OpenAI-shaped APIs, and the `list / show / pull / run / serve / ps` CLI.
 
 **Verified shelf (real-load runs, our numbers — see [PLAN.md](PLAN.md) §7):**
-- ✅ `dream:7b` — Tesla T4 (Colab), 2026-10-21: peak VRAM 9.80GB, ~28 canvas tok/s steady-state at the recipe defaults. Quality notes live in its recipe.
+- ✅ `dream:7b` — Tesla T4 (Colab), 2026-10-21: peak VRAM 9.80GB, ~6.7 canvas tok/s at the swept recipe defaults (steps=128; the original 32-step default was faster but garbled code output). Quality notes live in its recipe.
 - ✅ `sdar:4b` — Tesla T4 (Colab, High-RAM runtime), 2026-10-21: peak VRAM 8.87GB, ~12 canvas tok/s at the recipe defaults, clean quality across the fixed prompt set (correct math, runnable code, complete lists, exact one-word instruction following). Verified with ollada's load repairs active — its upstream packaging needs five of them; see the adapter.
 - ✅ `diffcoder:8b` — Tesla T4 (Colab), 2026-10-21: peak VRAM 15.15GB (the T4 is this recipe's floor — ~0.5GB headroom), ~6.7 canvas tok/s at the recipe defaults, code quality strong across the coding prompt set. Verified with ollada's mask-dtype repair active; see the recipe notes.
 

@@ -14,15 +14,15 @@ env:
   transformers: "==4.53.3" # Dream's custom code breaks on transformers 5.x (RoPE 'default' KeyError)
   extras: [torch, accelerate, bitsandbytes]
 generate:
-  steps: 32
+  steps: 128               # swept 2026-10-21 (32/64/128/256): 32 and 64 both produced broken Fibonacci code (32 in two independent runs); 128 is the lowest count with no observed failure. 256 was NOT better — it answered the train problem wrong once (see verified notes) at half the speed.
   gen_length: 256
   block_length: 32
   temperature: 0.2
   remasking: low_confidence
 verified:
   hardware: "Tesla T4 (Colab)"
-  tokens_per_sec: 28.0     # steady-state canvas tok/s (runs: 19.4 first/warmup, 28.3, 28.0, 27.9)
+  tokens_per_sec: 6.7      # at the swept default steps=128 (T4, 2026-10-21 sweep). The original verification at steps=32 measured 28.0 — fast, but its code output garbles; see notes.
   vram_gb: 9.80            # peak during load + generation — so ~10GB is the practical floor at these defaults; 8GB cards will not fit dream:7b as-is
   load_seconds: 249.1      # includes the first-time ~15GB weight download in Colab; cached loads are a separate (unmeasured) number
   date: "2026-10-21"
-  notes: "Quality at steps=32: short factual + math answers good (train-speed problem correct with steps); code output can garble mid-block and long list answers can truncate early — see PLAN.md Phase 2 steps sweep. Coding slot belongs to diffcoder:8b."
+  notes: "Steps swept 2026-10-21 (sweep notebook v0.1.0, same prompt set, ONE run per config at temperature 0.2 — treat as noisy samples, not laws). steps=32 (28 tok/s): math + definition fine, list complete, but Fibonacci code garbled — the same failure as the verification run, so 2/2 at 32. steps=64 (13.5 tok/s): best-structured math of the sweep, Fibonacci STILL broken (unterminated string, tuple-unpacking bugs). steps=128 (6.7 tok/s, THE DEFAULT): Fibonacci clean and correct (simple recursive), math's final answer correct though its intermediate steps are sloppy, everything else fine — the lowest count with no observed failure. steps=256 (3.4 tok/s): Fibonacci fine, but the train problem came out WRONG ('45 / 60 = 60 hours' -> 75 km/h) — the only wrong math answer in the sweep, at half of 128's speed. More steps did not mean better here. Coding still belongs to diffcoder:8b; dream is the general-chat slot."
