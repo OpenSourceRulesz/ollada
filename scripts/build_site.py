@@ -86,8 +86,8 @@ PAGE = """<!DOCTYPE html>
 </head>
 <body>
 <header><div class="wrap nav">
-  <img src="{root}assets/logo-badge.png" alt="ollada pig logo">
-  <a class="brand" href="{root}index.html">ollada</a>
+  <img src="{root}assets/logo-badge.png" alt="Ollada pig logo">
+  <a class="brand" href="{root}index.html">Ollada</a>
   <nav>
     <a href="{root}index.html#shelf">Library</a>
     <a href="https://github.com/OpenSourceRulesz/ollada">GitHub</a>
@@ -98,7 +98,7 @@ PAGE = """<!DOCTYPE html>
 {body}
 </main>
 <footer><div class="wrap">
-  ollada — the shelf for open-source diffusion language models. Local-first, $0 project:
+  Ollada — the shelf for open-source diffusion language models. Local-first, $0 project:
   no telemetry, no hosted registry — models come from Hugging Face, recipes are verified here.
   Every number on this site was measured by a real-load run on the hardware named.
 </div></footer>
@@ -151,9 +151,9 @@ def index_body(models: list[dict]) -> str:
     cards = "\n".join(card(m) for m in models)
     return f"""
 <div class="hero">
-  <img src="assets/logo-badge.png" alt="ollada — the pig">
+  <img src="assets/logo-badge.png" alt="Ollada — the pig">
   <h1>Get up and running with diffusion language models</h1>
-  <p>Ollama is the shelf for open autoregressive models. ollada is the shelf for
+  <p>Ollama is the shelf for open autoregressive models. Ollada is the shelf for
      open <strong>diffusion</strong> models — curated names, verified recipes,
      one command, running locally on your GPU.</p>
   <div class="term">
@@ -173,7 +173,7 @@ measured VRAM, speed, and quality on named hardware. No vendor benchmarks.</p>
 <h2 class="section">Why a shelf?</h2>
 <p class="sub">Diffusion models on Hugging Face ship with incompatible generation code,
 undocumented defaults, and no promise that the recipe on the card actually runs.
-ollada wraps each model family in a tested adapter, bakes the verified defaults
+Ollada wraps each model family in a tested adapter, bakes the verified defaults
 (steps, block size, quantization) into a recipe, and serves it behind an
 Ollama-shaped API — so tools that already speak Ollama can point at port 11435.</p>
 """
@@ -204,7 +204,7 @@ def model_body(m: dict) -> str:
 </div>
 <div class="stats">{stat_html}
 </div>
-<p class="sub">Verified {esc(v.get('date', ''))} through ollada's own code. Load time
+<p class="sub">Verified {esc(v.get('date', ''))} through Ollada's own code. Load time
 includes the first weight download where noted in the verification notes —
 cached loads are faster. Desktop verification (RTX 5060 Ti) is the pre-launch
 re-check; T4 numbers are the conservative floor.</p>
@@ -212,7 +212,7 @@ re-check; T4 numbers are the conservative floor.</p>
 <table>{rows}
 </table>
 <p>Weights: <a href="https://huggingface.co/{src}">{src}</a> (pulled from Hugging Face —
-ollada hosts no registry).</p>
+Ollada hosts no registry).</p>
 <h2 class="section">Verification notes</h2>
 <div class="notes">{esc(v.get('notes', ''))}</div>
 """
@@ -236,11 +236,11 @@ def main() -> int:
     shutil.copy(ASSETS / "logo-badge.png", out / "assets" / "logo-badge.png")
 
     (out / "index.html").write_text(PAGE.format(
-        title="ollada — the shelf for open-source diffusion language models",
+        title="Ollada — the shelf for open-source diffusion language models",
         root="", body=index_body(models)))
     for m in models:
         (out / "models" / f"{slug(m['name'])}.html").write_text(PAGE.format(
-            title=f"{m['name']} · ollada", root="../", body=model_body(m)))
+            title=f"{m['name']} · Ollada", root="../", body=model_body(m)))
     print(f"built {out}: index + {len(models)} model pages "
           f"({', '.join(m['name'] for m in models)})")
     return 0
