@@ -11,14 +11,15 @@ size_gb_bf16: 16.0
 quant_default: int8        # ~8-9 GB — safe on 16GB cards alongside an editor
 dtype: float16             # T4-safe; vendor example uses bfloat16 on CUDA
 env:
-  transformers: null       # pin set by the verification run, not guessed
+  transformers: "==5.3.0"  # the version the model's config.json was saved with (its custom code targets transformers 5.x; the 4.53.3 shelf pin does NOT apply — separate env)
   extras: [torch, accelerate, bitsandbytes]
 generate:
-  steps: 128               # vendor example uses 512; 128 is our provisional quality/speed trade, to be swept
+  steps: 128               # vendor example uses 512; 128 is our provisional quality/speed trade, to be swept. Must stay divisible by gen_length/block_length (64).
   gen_length: 256
   block_length: 4          # per vendor example; swept in Phase 2
   remasking: low_confidence
   temperature: 0.0
+  threshold: null          # vendor example passes None (fixed transfer schedule); generate_block's own default is 0.95
 verified:
   hardware: null
   tokens_per_sec: null

@@ -29,6 +29,20 @@ def test_verification_state_matches_the_record():
     assert by_name["diffcoder:8b"].is_verified is False
 
 
+def test_family_env_pins_match_their_custom_code():
+    by_name = {r.name: r for r in load_catalog()}
+    # DiffCoder's custom code targets transformers 5.x; its config was saved
+    # with 5.3.0. It must NOT inherit the shelf's 4.53.3 pin.
+    assert by_name["diffcoder:8b"].env["transformers"] == "==5.3.0"
+    # Its generate_block defaults differ from the card example: the recipe
+    # carries threshold explicitly as null (fixed transfer schedule).
+    assert "threshold" in by_name["diffcoder:8b"].generate
+    assert by_name["diffcoder:8b"].generate["threshold"] is None
+    # SDAR and Dream share the 4.53.3-era environment.
+    assert by_name["dream:7b"].env["transformers"] == "==4.53.3"
+    assert by_name["sdar:4b"].env["transformers"] == ">=4.52.4"
+
+
 def test_get_recipe_roundtrip_and_unknown_model():
     assert get_recipe("dream:7b").family == "dream"
     with pytest.raises(RecipeError):

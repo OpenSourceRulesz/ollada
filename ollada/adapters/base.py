@@ -71,9 +71,12 @@ class BaseAdapter:
         """Tokenize a chat history, preferring the tokenizer's chat template."""
         tok = self.tokenizer
         if getattr(tok, "chat_template", None):
-            return tok.apply_chat_template(
+            result = tok.apply_chat_template(
                 messages, tokenize=True, add_generation_prompt=True, return_tensors="pt"
             )
+            if isinstance(result, dict):  # BatchEncoding (newer transformers style)
+                result = result["input_ids"]
+            return result
         text = ""
         for msg in messages:
             text += f"{msg['role']}: {msg['content']}\n"
