@@ -1,0 +1,26 @@
+# ollada Recipe (schema v1) — dream:7b
+# Defaults below are PROVISIONAL until the verification block is filled by a
+# real-load run (see PLAN.md §7). Never publish vendor numbers as verified.
+name: dream:7b
+family: dream
+source: Dream-org/Dream-v0-Instruct-7B
+license: Apache-2.0
+task: chat
+description: Dream 7B instruct — strong general diffusion chat model; ollada's proven-harness flagship.
+size_gb_bf16: 15.2
+quant_default: int8        # ~8 GB — the T4 / 16GB-card default
+dtype: float16             # T4-safe; bf16 cards may override
+env:
+  transformers: "==4.53.3" # Dream's custom code breaks on transformers 5.x (RoPE 'default' KeyError)
+  extras: [torch, accelerate, bitsandbytes]
+generate:
+  steps: 32
+  gen_length: 256
+  block_length: 32
+  temperature: 0.2
+  remasking: low_confidence
+verified:
+  hardware: null
+  tokens_per_sec: null
+  vram_gb: null
+  date: null

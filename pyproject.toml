@@ -19,6 +19,13 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
+dependencies = ["pyyaml>=6.0"]
+
+[project.optional-dependencies]
+gpu = ["torch", "transformers", "accelerate", "bitsandbytes", "huggingface-hub"]
+server = ["fastapi", "uvicorn"]
+dev = ["pytest"]
+
 [project.urls]
 Homepage = "https://github.com/OpenSourceRulesz/ollada"
 Repository = "https://github.com/OpenSourceRulesz/ollada"

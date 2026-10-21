@@ -19,7 +19,9 @@ ollada serve   # local API on http://localhost:11435
 
 ## Status
 
-**0.0.1 — name-claim / planning release.** The full plan (product definition, recipe format, initial 3-model shelf, verification gate, phased timeline) is in [PLAN.md](PLAN.md). No models are served yet; the runtime is in development.
+**In development (Phase 1).** The runtime core is built: recipe catalog, family adapters (Dream / Nemotron / DiffCoder), a one-model-at-a-time manager, Ollama-shaped + OpenAI-shaped APIs, and the `list / show / pull / run / serve / ps` CLI — 12 unit tests passing. **No model is verified yet**: a model joins the shelf for real only after a real-load run on GPU hardware fills in its recipe's verification block (see [PLAN.md](PLAN.md) §7). First up: `dream:7b` on a Colab T4.
+
+The first shelf: `dream:7b` (general) · `nemotron:3b` (NVIDIA, small/fast) · `diffcoder:8b` (coding).
 
 Named the way Ollama was: Ollama ← LLaMA (the first big open autoregressive model). **Ollada ← LLaDA** (the first big open diffusion language model, Feb 2025).
 

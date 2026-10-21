@@ -1,0 +1,26 @@
+# ollada Recipe (schema v1) — diffcoder:8b
+# Defaults below are PROVISIONAL until the verification block is filled by a
+# real-load run (see PLAN.md §7). Never publish vendor numbers as verified.
+name: diffcoder:8b
+family: diffcoder
+source: ByteDance-Seed/Stable-DiffCoder-8B-Instruct
+license: MIT
+task: coding
+description: Best open diffusion coder (HumanEval 86.6 / MBPP 85.7 on its card) — the shelf's coding slot.
+size_gb_bf16: 16.0
+quant_default: int8        # ~8-9 GB — safe on 16GB cards alongside an editor
+dtype: float16             # T4-safe; vendor example uses bfloat16 on CUDA
+env:
+  transformers: null       # pin set by the verification run, not guessed
+  extras: [torch, accelerate, bitsandbytes]
+generate:
+  steps: 128               # vendor example uses 512; 128 is our provisional quality/speed trade, to be swept
+  gen_length: 256
+  block_length: 4          # per vendor example; swept in Phase 2
+  remasking: low_confidence
+  temperature: 0.0
+verified:
+  hardware: null
+  tokens_per_sec: null
+  vram_gb: null
+  date: null

@@ -1,6 +1,6 @@
 # Diffusion Shelf — Plan
 ### Working name: **Ollada** (see §9 — mirrors Ollama's naming move: Ollama ← LLaMA, Ollada ← LLaDA). An "Ollama for diffusion models": a curated library + local service where people know to get open-source diffusion language models (dLLMs).
-**Status:** Plan v1.1 — 2026-10-21 — **name CLAIMED on GitHub + PyPI**: github.com/OpenSourceRulesz/ollada created + pushed; Dallas registered the PyPI pending trusted publisher; tag v0.0.1 pushed — note the tag push never triggered the workflow (0 runs; cause undetermined), so the publish ran via manual `workflow_dispatch` from main after the version-check step was made tag-only; run 39617965181 succeeded; `pip install ollada` (0.0.1) verified from a fresh venv AND via `pip download --no-cache-dir`; PyPI JSON API returns 200 (its initial 404 was CDN negative-caching from the pre-claim checks). Runtime build still awaits the remaining plan decisions.
+**Status:** Plan v1.2 — 2026-10-21 — **BUILD STARTED** at Dallas's go (3-model shelf with the Nemotron swap, §5). **Name CLAIMED on GitHub + PyPI**: github.com/OpenSourceRulesz/ollada created + pushed; Dallas registered the PyPI pending trusted publisher; tag v0.0.1 pushed — note the tag push never triggered the workflow (0 runs; cause undetermined), so the publish ran via manual `workflow_dispatch` from main after the version-check step was made tag-only; run 39617965181 succeeded; `pip install ollada` (0.0.1) verified from a fresh venv AND via `pip download --no-cache-dir`; PyPI JSON API returns 200 (its initial 404 was CDN negative-caching from the pre-claim checks). Runtime build still awaits the remaining plan decisions.
 **Cost rule:** $0 project (same as FFTP / PrivateContext). No domain, no telemetry, no paid services. Gemini free tier only if ever needed. Nothing public without per-item approval (draft → review → agree → post).
 
 ---
@@ -56,6 +56,8 @@ docs/
   LIBRARY.md        # human-readable shelf, generated from catalog/
 ```
 
+**Isolation rule (added v1.2, forced by a real conflict):** families have incompatible dependency pins — Dream needs `transformers==4.53.3`, Nemotron needs `transformers>=5.0`. So each family runs in an **isolated worker subprocess with its own pinned environment**; the daemon talks to one worker at a time over a local pipe. This also buys crash isolation (a model segfault can't kill the daemon) and clean VRAM unload (kill the worker). Phase 1 may start in-process for the Dream adapter alone; isolation lands with the Nemotron adapter, before any multi-family release.
+
 Design rules carried over from npc-engine / PrivateContext (learned the hard way):
 - Never pass raw quantization kwargs into a model's `__init__` (the `load_in_8bit` crash) — always `BitsAndBytesConfig`.
 - Pin transformers *per adapter family* if needed, and say so in the recipe — Dream needed `transformers==4.53.3` (ROPE `'default'` KeyError on 5.x).
@@ -88,10 +90,10 @@ Every field a normal user should never have to think about lives here, tested, n
 | Short name | Source | Job | Why it's on first |
 |---|---|---|---|
 | `dream:7b` | Dream-org/Dream-v0-Instruct-7B | general chat | We already have a proven, debugged harness for it (npc-engine). Lowest-risk first adapter. |
-| `sdar:4b` | JetLM/SDAR-4B-Chat | general, balanced | Best general quality-per-GB in the SDAR family (MMLU 74.9 / GSM8K 89.9 class); 1.7B is the later "tiny" addition, 8B the later "max" addition. |
+| `nemotron:3b` | nvidia/Nemotron-Labs-Diffusion-3B | general, small/fast | **Swapped in for sdar:4b at Dallas's direction 2026-10-21** ("people love NVIDIA"). Verified from its card/code: loads via plain transformers `AutoModel` (no SGLang commitment), tri-mode (AR / block-diffusion / self-speculation) in one checkpoint, `generate(block_length=32, threshold=0.9)`, ~67k HF downloads — the most-used open dLLM by a wide margin. 3B ≈ 6GB bf16 fits any gaming card. License: NVIDIA Nemotron Open Model License (we never redistribute weights; recipes point at NVIDIA's repo). Cost: requires `transformers>=5.0` — see the isolation rule in §3. |
 | `diffcoder:8b` | ByteDance-Seed/Stable-DiffCoder-8B-Instruct | coding | Best open diffusion coder (HumanEval 86.6 / MBPP 85.7 / BigCodeBench-Full 54.8), MIT. This is the model Dallas asked for for his own coding use. |
 
-**v0.2 shelf candidates (not promises):** `sdar:1.7b`, `sdar:8b`, `dream-coder:7b`, `fast:1.5b` (Fast-dLLM v2), `llada:8b`, `nemotron:3b` (likely via an SGLang adapter — separate decision).
+**v0.2 shelf candidates (not promises):** `sdar:1.7b`, `sdar:4b`, `sdar:8b` (first in queue — the swap cost us SDAR-4B's slightly stronger per-size scores, not its place in line), `dream-coder:7b`, `fast:1.5b` (Fast-dLLM v2), `llada:8b`.
 
 ## 6. Phases & rough timeline (solo + Muse, part-time)
 - **Phase 0 — Spec freeze (1-2 days, no code beyond skeleton):** pick the public name (see §9), freeze Recipe format + API shapes, repo skeleton, this plan approved. *Gate: Dallas says go.*
