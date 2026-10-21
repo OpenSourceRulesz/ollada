@@ -95,6 +95,19 @@ Every field a normal user should never have to think about lives here, tested, n
 
 **v0.2 shelf candidates (not promises):** `sdar:1.7b`, `sdar:4b`, `sdar:8b` (first in queue — the swap cost us SDAR-4B's slightly stronger per-size scores, not its place in line), `dream-coder:7b`, `fast:1.5b` (Fast-dLLM v2), `llada:8b`.
 
+### Decision record — general slot: nemotron:3b vs sdar:4b (reopened by Dallas 2026-10-21, analysis same day)
+Diffusion-mode-to-diffusion-mode, from each lab's own paper (different eval setups — indicative, not controlled):
+| Metric | SDAR-4B (native diffusion) | Nemotron-3B (diffusion mode only) |
+|---|---|---|
+| MMLU | **74.9** | 72.1 |
+| GSM8K | **89.9** | 88.4 |
+| Math500 | 72.8 | **74.8** |
+| HumanEval | 72.8 | **74.4** |
+| MBPP | 65.4 | **73.5** |
+| IFEval | 56.6 | **68.9** |
+| GPQA | 33.0 | 33.8 |
+Notes: the Nemotron numbers Muse originally quoted (MMLU 72.1 / HumanEval 79.3 / avg 55.8) are its **quad self-speculation** mode, not diffusion (avg 52.9, TPF 1.91); its diffusion mode still beats its own AR mode on MMLU/GSM8K/MBPP in NVIDIA's table. SDAR's numbers are at its fastest config (block 4, 4 steps). Other axes: size ~8.8GB vs ~6.2GB weights; context 32K vs 256K (config); license Apache-2.0 vs NVIDIA Nemotron license; downloads 897 vs ~67k; SDAR likely shares Dream's transformers 4.53 pin (cheaper engineering), Nemotron forces transformers>=5 (isolated worker). **Status: NOT decided.** Muse's revised lean: Nemotron, ~65/35, on slot-job fit (instruction-following + code gaps are what chat users feel; size/context/trust) — with the T4 head-to-head (both models, same fixed prompts, load reliability + tok/s + outputs) as the agreed arbiter before the shelf locks. The catalog currently contains nemotron:3b from the first build; swapping back is one recipe + one adapter, nothing is published as verified either way.
+
 ## 6. Phases & rough timeline (solo + Muse, part-time)
 - **Phase 0 — Spec freeze (1-2 days, no code beyond skeleton):** pick the public name (see §9), freeze Recipe format + API shapes, repo skeleton, this plan approved. *Gate: Dallas says go.*
 - **Phase 1 — One model end-to-end (week 1):** daemon + CLI + Dream adapter, `pull/run/serve` working, real-load verified on Colab T4. Colab demo notebook v1. *Gate: a stranger could run the notebook fresh-kernel and get a good line out.*
