@@ -1,6 +1,10 @@
-# ollada
+<p align="center">
+  <img src="docs/assets/logo.png" width="150" alt="ollada — the pig. An ollada is a Catalan pork stew; Ollama has the llama, ollada has the pig.">
+</p>
 
-**The shelf for open-source diffusion language models.**
+<h1 align="center">ollada</h1>
+
+<p align="center"><strong>The shelf for open-source diffusion language models.</strong></p>
 
 Ollama is where people go to get open-source autoregressive models: clean names, one command, it just works. Diffusion language models (dLLMs) — LLaDA, Dream, SDAR, Stable-DiffCoder — have none of that. They're scattered across Hugging Face with incompatible generation code, undocumented defaults, and no verified "this actually runs" guarantee.
 
