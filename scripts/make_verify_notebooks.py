@@ -23,7 +23,7 @@ SPECS = [
     {
         "filename": "verify_dream_t4.ipynb",
         "model": "dream:7b",
-        "version": "0.1.1",
+        "version": "0.1.2",
         "subject": "Dream-v0-Instruct-7B in 8-bit",
         "pin_comment": "pinned for the Dream family: transformers 4.53.3, see the recipe",
         "pkgs": ["transformers==4.53.3", "torch", "accelerate", "bitsandbytes", "pyyaml"],
@@ -34,7 +34,7 @@ SPECS = [
     {
         "filename": "verify_sdar_t4.ipynb",
         "model": "sdar:4b",
-        "version": "0.1.0",
+        "version": "0.1.1",
         "subject": "SDAR-4B-Chat (bf16 weights, fp16 load)",
         "pin_comment": "SDAR needs transformers>=4.57 (its modeling imports TransformersKwargs, added in 4.57) — its README's >=4.52.4 claim is stale; the adapter repairs its flash_attn requirement, missing HF file, and BlockMask-only attention at load",
         "pkgs": ["transformers==4.57.0", "torch", "accelerate", "pyyaml"],
@@ -49,7 +49,7 @@ SPECS = [
     {
         "filename": "verify_diffcoder_t4.ipynb",
         "model": "diffcoder:8b",
-        "version": "0.1.0",
+        "version": "0.1.1",
         "subject": "Stable-DiffCoder-8B-Instruct in 8-bit",
         "pin_comment": "DiffCoder family: transformers 5.3.0 (the version its config was saved with)",
         "pkgs": ["transformers==5.3.0", "torch", "accelerate", "bitsandbytes", "pyyaml"],
@@ -119,6 +119,15 @@ print(f"GPU: {{name}}  VRAM: {{total:.1f}} GB")"""),
         ("code", f"""# 3 — load {model} through ollada itself (timed)
 import time, torch
 from ollada.runtime.manager import ModelManager
+
+# Rerun hygiene: if this kernel already loaded a model in a previous run,
+# its variables are still bound and the old weights still occupy VRAM —
+# loading a second copy OOMs a 16GB card. Drop stale references first.
+import gc
+for _stale in ("adapter", "manager"):
+    globals().pop(_stale, None)
+gc.collect()
+torch.cuda.empty_cache()
 
 torch.cuda.reset_peak_memory_stats()
 t0 = time.time()

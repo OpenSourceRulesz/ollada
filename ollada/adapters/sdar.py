@@ -390,11 +390,14 @@ class SdarAdapter(BaseAdapter):
         qc = quantization_config(recipe.quant_default)
         if qc is not None:
             kwargs["quantization_config"] = qc
+        if qc is not None or torch.cuda.is_available():
+            # Place layers directly on the GPU during load; a CPU load
+            # followed by .cuda() doubles peak host+device traffic and
+            # muddies OOM diagnosis.
             kwargs["device_map"] = "auto"
         self.model = AutoModelForCausalLM.from_pretrained(local_dir, **kwargs)
-        if qc is None and torch.cuda.is_available():
-            self.model = self.model.cuda()
         self.model.eval()
+        notes.append(f"loaded dtype: {self.model.dtype}")
         if _decompile_flex_attention(self.model):
             self.load_notes.append("flex attention: eager (compile wrapper swapped out)")
         gen_cfg = GenerationConfig.from_pretrained(local_dir)
