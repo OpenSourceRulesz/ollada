@@ -14,7 +14,7 @@ env:
   transformers: "==5.3.0"  # the version the model's config.json was saved with (its custom code targets transformers 5.x; the 4.53.3 shelf pin does NOT apply — separate env)
   extras: [torch, accelerate, bitsandbytes]
 generate:
-  steps: 128               # vendor example uses 512; 128 is our provisional quality/speed trade, to be swept. Must stay divisible by gen_length/block_length (64).
+  steps: 256               # swept 2026-10-21 (64/128/256 on the fixed prompt set): 64 collapses (repetition degeneration, bug-fix prompt never delivered), 128 matches 256 on code but its explanation prose carries grammar artifacts; 256 is clean. Vendor example uses 512. Must stay divisible by gen_length/block_length (64).
   gen_length: 256
   block_length: 4          # per vendor example; swept in Phase 2
   remasking: low_confidence
@@ -22,8 +22,8 @@ generate:
   threshold: null          # vendor example passes None (fixed transfer schedule); generate_block's own default is 0.95
 verified:
   hardware: "Tesla T4 (Colab)"
-  tokens_per_sec: 6.7      # steady-state across the coding prompt set (range 6.2-6.7 canvas tok/s at steps=128)
+  tokens_per_sec: 4.1      # at the swept default steps=256 (T4, 2026-10-21 sweep). steps=128 measured 6.8 with prose artifacts; steps=64 measured ~10 but quality-collapsed — see notes.
   vram_gb: 15.15           # peak during load + generation — the T4's 15.6GB is this recipe's FLOOR; ~0.5GB headroom only
   load_seconds: 89.5
   date: "2026-10-21"
-  notes: "Verified WITH ollada's mask-dtype repair active (their generate_block hardcodes a bf16 mask; fp16-on-T4 needs it aligned — see adapters/diffcoder.py). Quality at recipe defaults: bug-fix prompt excellent (both planted bugs correctly diagnosed, corrected code right); palindrome code correct and clean but ignored the 'only output code' instruction (preamble + explanation added); Fibonacci correct in approach but the 256-token canvas ran out mid-function after a chatty preamble and long docstring; hash-map answer exact. Pattern: the CODE is clean where it lands; the surrounding prose shows occasional diffusion grammar artifacts ('accumulatinging', 'two couple of issues'). Speed is steps-bound (128 steps / 256 canvas) — a steps sweep is the Phase 2 lever."
+  notes: "Verified WITH ollada's mask-dtype repair active (their generate_block hardcodes a bf16 mask; fp16-on-T4 needs it aligned — see adapters/diffcoder.py). Steps swept 2026-10-21 (sweep notebook v0.1.0, same prompt set): 64 steps COLLAPSES — repetition degeneration ('by by by...' on the bug-fix prompt, 'maps maps maps' on the hash-map prompt, early-EOS never fires); 128 steps: code fully correct but explanation prose has grammar artifacts ('accumulatinging', 'two couple of issues'); 256 steps (the default): same correct code, prose clean. Quality at the default: bug-fix excellent (both planted bugs diagnosed, corrected code right); palindrome code correct/clean but ignores the 'only output code' instruction (preamble + explanation added); hash-map exact. Known limit at ALL step counts: the model's verbose style (preamble + long docstring) exhausts the 256-token canvas mid-answer on the Fibonacci prompt — a gen_length question, not a steps question; a gen_length bump is future sweep material."
