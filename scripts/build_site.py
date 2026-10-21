@@ -150,7 +150,7 @@ def index_body(models: list[dict]) -> str:
     cards = "\n".join(card(m) for m in models)
     return f"""
 <div class="hero">
-  <h1>Get up and running with diffusion language models</h1>
+  <h1>Diffusion models, verified and ready to run</h1>
   <p><strong>Ollada</strong> is the shelf for open <strong>diffusion</strong> models —
      curated names, verified recipes, one command, running locally on your GPU.
      The same idea <strong>Ollama</strong> proved for autoregressive models,
