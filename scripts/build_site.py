@@ -36,7 +36,7 @@ header { border-bottom:1px solid var(--line); }
 .nav nav { margin-left:auto; display:flex; gap:18px; }
 .nav nav a { text-decoration:none; color:var(--mut); font-size:15px; }
 .nav nav a:hover { color:var(--ink); }
-.hero { text-align:center; padding:56px 0 30px; }
+.hero { text-align:center; padding:48px 0 30px; }
 .hero img { width:110px; }
 .hero h1 { font-size:40px; margin:14px 0 8px; letter-spacing:-0.5px; }
 .hero p { color:var(--mut); font-size:19px; max-width:620px; margin:0 auto; }
@@ -150,7 +150,6 @@ def index_body(models: list[dict]) -> str:
     cards = "\n".join(card(m) for m in models)
     return f"""
 <div class="hero">
-  <img src="assets/logo-badge.png" alt="Ollada — the pig">
   <h1>Get up and running with diffusion language models</h1>
   <p><strong>Ollada</strong> is the shelf for open <strong>diffusion</strong> models —
      curated names, verified recipes, one command, running locally on your GPU.
