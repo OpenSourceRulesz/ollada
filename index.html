@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ollada — the shelf for open-source diffusion language models</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="assets/logo-badge.png">
+</head>
+<body>
+<header><div class="wrap nav">
+  <img src="assets/logo-badge.png" alt="ollada pig logo">
+  <a class="brand" href="index.html">ollada</a>
+  <nav>
+    <a href="index.html#shelf">Library</a>
+    <a href="https://github.com/OpenSourceRulesz/ollada">GitHub</a>
+    <a href="https://pypi.org/project/ollada/">PyPI</a>
+  </nav>
+</div></header>
+<main class="wrap">
+
+<div class="hero">
+  <img src="assets/logo-badge.png" alt="ollada — the pig">
+  <h1>Get up and running with diffusion language models</h1>
+  <p>Ollama is the shelf for open autoregressive models. ollada is the shelf for
+     open <strong>diffusion</strong> models — curated names, verified recipes,
+     one command, running locally on your GPU.</p>
+  <div class="term">
+    <div><span class="c">$</span> pip install ollada</div>
+    <div><span class="c">$</span> ollada pull diffcoder:8b</div>
+    <div><span class="c">$</span> ollada run diffcoder:8b</div>
+    <div><span class="c">$</span> ollada serve <span class="c"># local API on http://localhost:11435</span></div>
+  </div>
+</div>
+
+<h2 class="section" id="shelf">Library</h2>
+<p class="sub">A model earns its short name only after a real-load verification run —
+measured VRAM, speed, and quality on named hardware. No vendor benchmarks.</p>
+<div class="grid">
+<a class="card" href="models/diffcoder-8b.html">
+  <h3>diffcoder:8b</h3>
+  <p>Best open diffusion coder (HumanEval 86.6 / MBPP 85.7 on its card) — the shelf&#x27;s coding slot.</p>
+  <div class="badges">
+    <span class="badge">coding</span>
+    <span class="badge">MIT</span>
+    <span class="badge">16.0 GB</span>
+    <span class="badge ver">verified · 15.15 GB VRAM · 4.1 tok/s</span>
+  </div>
+</a>
+
+<a class="card" href="models/dream-7b.html">
+  <h3>dream:7b</h3>
+  <p>Dream 7B instruct — strong general diffusion chat model; ollada&#x27;s proven-harness flagship.</p>
+  <div class="badges">
+    <span class="badge">chat</span>
+    <span class="badge">Apache-2.0</span>
+    <span class="badge">15.2 GB</span>
+    <span class="badge ver">verified · 9.8 GB VRAM · 6.7 tok/s</span>
+  </div>
+</a>
+
+<a class="card" href="models/sdar-4b.html">
+  <h3>sdar:4b</h3>
+  <p>SDAR 4B — Qwen3-4B converted to block diffusion; strongest per-size diffusion generalist in its paper (MMLU 74.9 / GSM8K 89.9, diffusion mode).</p>
+  <div class="badges">
+    <span class="badge">chat</span>
+    <span class="badge">Apache-2.0</span>
+    <span class="badge">8.8 GB</span>
+    <span class="badge ver">verified · 8.87 GB VRAM · 12.3 tok/s</span>
+  </div>
+</a>
+</div>
+
+<h2 class="section">Why a shelf?</h2>
+<p class="sub">Diffusion models on Hugging Face ship with incompatible generation code,
+undocumented defaults, and no promise that the recipe on the card actually runs.
+ollada wraps each model family in a tested adapter, bakes the verified defaults
+(steps, block size, quantization) into a recipe, and serves it behind an
+Ollama-shaped API — so tools that already speak Ollama can point at port 11435.</p>
+
+</main>
+<footer><div class="wrap">
+  ollada — the shelf for open-source diffusion language models. Local-first, $0 project:
+  no telemetry, no hosted registry — models come from Hugging Face, recipes are verified here.
+  Every number on this site was measured by a real-load run on the hardware named.
+</div></footer>
+</body>
+</html>

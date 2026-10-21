@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sdar:4b · ollada</title>
+<link rel="stylesheet" href="../style.css">
+<link rel="icon" href="../assets/logo-badge.png">
+</head>
+<body>
+<header><div class="wrap nav">
+  <img src="../assets/logo-badge.png" alt="ollada pig logo">
+  <a class="brand" href="../index.html">ollada</a>
+  <nav>
+    <a href="../index.html#shelf">Library</a>
+    <a href="https://github.com/OpenSourceRulesz/ollada">GitHub</a>
+    <a href="https://pypi.org/project/ollada/">PyPI</a>
+  </nav>
+</div></header>
+<main class="wrap">
+
+<div class="modelhead">
+  <h1>sdar:4b</h1>
+  <p>SDAR 4B — Qwen3-4B converted to block diffusion; strongest per-size diffusion generalist in its paper (MMLU 74.9 / GSM8K 89.9, diffusion mode).</p>
+</div>
+<div class="term" style="margin:20px 0;">
+  <div><span class="c">$</span> ollada pull sdar:4b</div>
+  <div><span class="c">$</span> ollada run sdar:4b</div>
+</div>
+<div class="stats"><div class="stat"><div class="k">Verified on</div><div class="v">Tesla T4 (Colab, High-RAM runtime)</div></div>
+<div class="stat"><div class="k">Peak VRAM</div><div class="v">8.87 GB</div></div>
+<div class="stat"><div class="k">Speed</div><div class="v">12.3 canvas tok/s</div></div>
+<div class="stat"><div class="k">Load time</div><div class="v">45.1 s</div></div>
+</div>
+<p class="sub">Verified 2026-10-21 through ollada's own code. Load time
+includes the first weight download where noted in the verification notes —
+cached loads are faster. Desktop verification (RTX 5060 Ti) is the pre-launch
+re-check; T4 numbers are the conservative floor.</p>
+<h2 class="section">Recipe defaults</h2>
+<table><tr><td class="k">Denoising steps</td><td>4</td></tr>
+<tr><td class="k">Canvas length (tokens)</td><td>256</td></tr>
+<tr><td class="k">Block length</td><td>4</td></tr>
+<tr><td class="k">Remasking</td><td>low_confidence_dynamic</td></tr>
+<tr><td class="k">Temperature</td><td>1.0</td></tr>
+<tr><td class="k">Confidence threshold</td><td>0.9</td></tr>
+<tr><td class="k">Default quantization</td><td>bf16</td></tr>
+<tr><td class="k">Weights size (bf16)</td><td>8.8 GB</td></tr>
+<tr><td class="k">License</td><td>Apache-2.0</td></tr>
+<tr><td class="k">Source</td><td>JetLM/SDAR-4B-Chat</td></tr>
+</table>
+<p>Weights: <a href="https://huggingface.co/JetLM/SDAR-4B-Chat">JetLM/SDAR-4B-Chat</a> (pulled from Hugging Face —
+ollada hosts no registry).</p>
+<h2 class="section">Verification notes</h2>
+<div class="notes">Verified WITH ollada&#x27;s load repairs active (torch RMSNorm fallback for flash_attn, authors&#x27; fused file restored from GitHub, BlockMask loop, eager flex attention, inner-model drive — see adapters/sdar.py). Quality at recipe defaults: math correct with clean steps; Fibonacci correct and runnable (better than dream:7b&#x27;s garbled attempt); 3-item list complete (dream truncated its own); one-word instruction probe answered exactly &#x27;Paris&#x27;. Speed is eager-flex-bound on T4 (scores matrix materialized); compiled flex is a Phase 2 revisit. Colab note: the standard-RAM T4 runtime was not enough during load — High-RAM runtime worked; GPU VRAM itself peaked at only 8.87GB.</div>
+
+</main>
+<footer><div class="wrap">
+  ollada — the shelf for open-source diffusion language models. Local-first, $0 project:
+  no telemetry, no hosted registry — models come from Hugging Face, recipes are verified here.
+  Every number on this site was measured by a real-load run on the hardware named.
+</div></footer>
+</body>
+</html>

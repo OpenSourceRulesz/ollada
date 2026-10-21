@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>diffcoder:8b · ollada</title>
+<link rel="stylesheet" href="../style.css">
+<link rel="icon" href="../assets/logo-badge.png">
+</head>
+<body>
+<header><div class="wrap nav">
+  <img src="../assets/logo-badge.png" alt="ollada pig logo">
+  <a class="brand" href="../index.html">ollada</a>
+  <nav>
+    <a href="../index.html#shelf">Library</a>
+    <a href="https://github.com/OpenSourceRulesz/ollada">GitHub</a>
+    <a href="https://pypi.org/project/ollada/">PyPI</a>
+  </nav>
+</div></header>
+<main class="wrap">
+
+<div class="modelhead">
+  <h1>diffcoder:8b</h1>
+  <p>Best open diffusion coder (HumanEval 86.6 / MBPP 85.7 on its card) — the shelf&#x27;s coding slot.</p>
+</div>
+<div class="term" style="margin:20px 0;">
+  <div><span class="c">$</span> ollada pull diffcoder:8b</div>
+  <div><span class="c">$</span> ollada run diffcoder:8b</div>
+</div>
+<div class="stats"><div class="stat"><div class="k">Verified on</div><div class="v">Tesla T4 (Colab)</div></div>
+<div class="stat"><div class="k">Peak VRAM</div><div class="v">15.15 GB</div></div>
+<div class="stat"><div class="k">Speed</div><div class="v">4.1 canvas tok/s</div></div>
+<div class="stat"><div class="k">Load time</div><div class="v">89.5 s</div></div>
+</div>
+<p class="sub">Verified 2026-10-21 through ollada's own code. Load time
+includes the first weight download where noted in the verification notes —
+cached loads are faster. Desktop verification (RTX 5060 Ti) is the pre-launch
+re-check; T4 numbers are the conservative floor.</p>
+<h2 class="section">Recipe defaults</h2>
+<table><tr><td class="k">Denoising steps</td><td>256</td></tr>
+<tr><td class="k">Canvas length (tokens)</td><td>256</td></tr>
+<tr><td class="k">Block length</td><td>4</td></tr>
+<tr><td class="k">Remasking</td><td>low_confidence</td></tr>
+<tr><td class="k">Temperature</td><td>0.0</td></tr>
+<tr><td class="k">Default quantization</td><td>int8</td></tr>
+<tr><td class="k">Weights size (bf16)</td><td>16.0 GB</td></tr>
+<tr><td class="k">License</td><td>MIT</td></tr>
+<tr><td class="k">Source</td><td>ByteDance-Seed/Stable-DiffCoder-8B-Instruct</td></tr>
+</table>
+<p>Weights: <a href="https://huggingface.co/ByteDance-Seed/Stable-DiffCoder-8B-Instruct">ByteDance-Seed/Stable-DiffCoder-8B-Instruct</a> (pulled from Hugging Face —
+ollada hosts no registry).</p>
+<h2 class="section">Verification notes</h2>
+<div class="notes">Verified WITH ollada&#x27;s mask-dtype repair active (their generate_block hardcodes a bf16 mask; fp16-on-T4 needs it aligned — see adapters/diffcoder.py). Steps swept 2026-10-21 (sweep notebook v0.1.0, same prompt set): 64 steps COLLAPSES — repetition degeneration (&#x27;by by by...&#x27; on the bug-fix prompt, &#x27;maps maps maps&#x27; on the hash-map prompt, early-EOS never fires); 128 steps: code fully correct but explanation prose has grammar artifacts (&#x27;accumulatinging&#x27;, &#x27;two couple of issues&#x27;); 256 steps (the default): same correct code, prose clean. Quality at the default: bug-fix excellent (both planted bugs diagnosed, corrected code right); palindrome code correct/clean but ignores the &#x27;only output code&#x27; instruction (preamble + explanation added); hash-map exact. Known limit at ALL step counts: the model&#x27;s verbose style (preamble + long docstring) exhausts the 256-token canvas mid-answer on the Fibonacci prompt — a gen_length question, not a steps question; a gen_length bump is future sweep material.</div>
+
+</main>
+<footer><div class="wrap">
+  ollada — the shelf for open-source diffusion language models. Local-first, $0 project:
+  no telemetry, no hosted registry — models come from Hugging Face, recipes are verified here.
+  Every number on this site was measured by a real-load run on the hardware named.
+</div></footer>
+</body>
+</html>
