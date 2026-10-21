@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>sdar:4b · ollada</title>
+<title>sdar:4b · Ollada</title>
 <link rel="stylesheet" href="../style.css">
 <link rel="icon" href="../assets/logo-badge.png">
 </head>
 <body>
 <header><div class="wrap nav">
-  <img src="../assets/logo-badge.png" alt="ollada pig logo">
-  <a class="brand" href="../index.html">ollada</a>
+  <img src="../assets/logo-badge.png" alt="Ollada pig logo">
+  <a class="brand" href="../index.html">Ollada</a>
   <nav>
     <a href="../index.html#shelf">Library</a>
     <a href="https://github.com/OpenSourceRulesz/ollada">GitHub</a>
@@ -32,7 +32,7 @@
 <div class="stat"><div class="k">Speed</div><div class="v">12.3 canvas tok/s</div></div>
 <div class="stat"><div class="k">Load time</div><div class="v">45.1 s</div></div>
 </div>
-<p class="sub">Verified 2026-10-21 through ollada's own code. Load time
+<p class="sub">Verified 2026-10-21 through Ollada's own code. Load time
 includes the first weight download where noted in the verification notes —
 cached loads are faster. Desktop verification (RTX 5060 Ti) is the pre-launch
 re-check; T4 numbers are the conservative floor.</p>
@@ -49,13 +49,13 @@ re-check; T4 numbers are the conservative floor.</p>
 <tr><td class="k">Source</td><td>JetLM/SDAR-4B-Chat</td></tr>
 </table>
 <p>Weights: <a href="https://huggingface.co/JetLM/SDAR-4B-Chat">JetLM/SDAR-4B-Chat</a> (pulled from Hugging Face —
-ollada hosts no registry).</p>
+Ollada hosts no registry).</p>
 <h2 class="section">Verification notes</h2>
 <div class="notes">Verified WITH ollada&#x27;s load repairs active (torch RMSNorm fallback for flash_attn, authors&#x27; fused file restored from GitHub, BlockMask loop, eager flex attention, inner-model drive — see adapters/sdar.py). Quality at recipe defaults: math correct with clean steps; Fibonacci correct and runnable (better than dream:7b&#x27;s garbled attempt); 3-item list complete (dream truncated its own); one-word instruction probe answered exactly &#x27;Paris&#x27;. Speed is eager-flex-bound on T4 (scores matrix materialized); compiled flex is a Phase 2 revisit. Colab note: the standard-RAM T4 runtime was not enough during load — High-RAM runtime worked; GPU VRAM itself peaked at only 8.87GB.</div>
 
 </main>
 <footer><div class="wrap">
-  ollada — the shelf for open-source diffusion language models. Local-first, $0 project:
+  Ollada — the shelf for open-source diffusion language models. Local-first, $0 project:
   no telemetry, no hosted registry — models come from Hugging Face, recipes are verified here.
   Every number on this site was measured by a real-load run on the hardware named.
 </div></footer>

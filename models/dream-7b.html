@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>dream:7b · ollada</title>
+<title>dream:7b · Ollada</title>
 <link rel="stylesheet" href="../style.css">
 <link rel="icon" href="../assets/logo-badge.png">
 </head>
 <body>
 <header><div class="wrap nav">
-  <img src="../assets/logo-badge.png" alt="ollada pig logo">
-  <a class="brand" href="../index.html">ollada</a>
+  <img src="../assets/logo-badge.png" alt="Ollada pig logo">
+  <a class="brand" href="../index.html">Ollada</a>
   <nav>
     <a href="../index.html#shelf">Library</a>
     <a href="https://github.com/OpenSourceRulesz/ollada">GitHub</a>
@@ -32,7 +32,7 @@
 <div class="stat"><div class="k">Speed</div><div class="v">6.7 canvas tok/s</div></div>
 <div class="stat"><div class="k">Load time</div><div class="v">249.1 s</div></div>
 </div>
-<p class="sub">Verified 2026-10-21 through ollada's own code. Load time
+<p class="sub">Verified 2026-10-21 through Ollada's own code. Load time
 includes the first weight download where noted in the verification notes —
 cached loads are faster. Desktop verification (RTX 5060 Ti) is the pre-launch
 re-check; T4 numbers are the conservative floor.</p>
@@ -48,13 +48,13 @@ re-check; T4 numbers are the conservative floor.</p>
 <tr><td class="k">Source</td><td>Dream-org/Dream-v0-Instruct-7B</td></tr>
 </table>
 <p>Weights: <a href="https://huggingface.co/Dream-org/Dream-v0-Instruct-7B">Dream-org/Dream-v0-Instruct-7B</a> (pulled from Hugging Face —
-ollada hosts no registry).</p>
+Ollada hosts no registry).</p>
 <h2 class="section">Verification notes</h2>
 <div class="notes">Steps swept 2026-10-21 (sweep notebook v0.1.0, same prompt set, ONE run per config at temperature 0.2 — treat as noisy samples, not laws). steps=32 (28 tok/s): math + definition fine, list complete, but Fibonacci code garbled — the same failure as the verification run, so 2/2 at 32. steps=64 (13.5 tok/s): best-structured math of the sweep, Fibonacci STILL broken (unterminated string, tuple-unpacking bugs). steps=128 (6.7 tok/s, THE DEFAULT): Fibonacci clean and correct (simple recursive), math&#x27;s final answer correct though its intermediate steps are sloppy, everything else fine — the lowest count with no observed failure. steps=256 (3.4 tok/s): Fibonacci fine, but the train problem came out WRONG (&#x27;45 / 60 = 60 hours&#x27; -&gt; 75 km/h) — the only wrong math answer in the sweep, at half of 128&#x27;s speed. More steps did not mean better here. Coding still belongs to diffcoder:8b; dream is the general-chat slot.</div>
 
 </main>
 <footer><div class="wrap">
-  ollada — the shelf for open-source diffusion language models. Local-first, $0 project:
+  Ollada — the shelf for open-source diffusion language models. Local-first, $0 project:
   no telemetry, no hosted registry — models come from Hugging Face, recipes are verified here.
   Every number on this site was measured by a real-load run on the hardware named.
 </div></footer>
