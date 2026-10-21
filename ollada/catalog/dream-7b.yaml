@@ -6,7 +6,7 @@ family: dream
 source: Dream-org/Dream-v0-Instruct-7B
 license: Apache-2.0
 task: chat
-description: Dream 7B instruct — strong general diffusion chat model; ollada's proven-harness flagship.
+description: Dream 7B instruct — strong general diffusion chat model; Ollada's proven-harness flagship.
 size_gb_bf16: 15.2
 quant_default: int8        # ~8 GB — the T4 / 16GB-card default
 dtype: float16             # T4-safe; bf16 cards may override

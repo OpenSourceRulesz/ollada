@@ -31,7 +31,7 @@ a { color:var(--ink); }
 .wrap { max-width:880px; margin:0 auto; padding:0 20px; }
 header { border-bottom:1px solid var(--line); }
 .nav { display:flex; align-items:center; gap:12px; padding:14px 0; }
-.nav img { width:34px; height:34px; }
+.nav img { width:40px; height:40px; display:block; }
 .nav .brand { font-weight:700; font-size:20px; text-decoration:none; }
 .nav nav { margin-left:auto; display:flex; gap:18px; }
 .nav nav a { text-decoration:none; color:var(--mut); font-size:15px; }
@@ -86,8 +86,7 @@ PAGE = """<!DOCTYPE html>
 </head>
 <body>
 <header><div class="wrap nav">
-  <img src="{root}assets/logo-badge.png" alt="Ollada pig logo">
-  <a class="brand" href="{root}index.html">Ollada</a>
+  <a href="{root}index.html"><img src="{root}assets/logo-badge.png" alt="Ollada — home"></a>
   <nav>
     <a href="{root}index.html#shelf">Library</a>
     <a href="https://github.com/OpenSourceRulesz/ollada">GitHub</a>
@@ -153,9 +152,10 @@ def index_body(models: list[dict]) -> str:
 <div class="hero">
   <img src="assets/logo-badge.png" alt="Ollada — the pig">
   <h1>Get up and running with diffusion language models</h1>
-  <p>Ollama is the shelf for open autoregressive models. Ollada is the shelf for
-     open <strong>diffusion</strong> models — curated names, verified recipes,
-     one command, running locally on your GPU.</p>
+  <p><strong>Ollada</strong> is the shelf for open <strong>diffusion</strong> models —
+     curated names, verified recipes, one command, running locally on your GPU.
+     The same idea <strong>Ollama</strong> proved for autoregressive models,
+     rebuilt for diffusion.</p>
   <div class="term">
     <div><span class="c">$</span> pip install ollada</div>
     <div><span class="c">$</span> ollada pull diffcoder:8b</div>
