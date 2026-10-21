@@ -8,7 +8,7 @@ Re-run this script after editing the cell sources; never hand-edit the .ipynb.
 import json
 from pathlib import Path
 
-NOTEBOOK_VERSION = "0.1.0"
+NOTEBOOK_VERSION = "0.1.1"
 
 CELLS = [
     ("markdown", f"""# ollada — verify dream:7b on a T4 (notebook v{NOTEBOOK_VERSION})
@@ -29,7 +29,8 @@ subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-deps",
 print("installed")"""),
     ("code", f"""# 2 — version stamp + GPU check (acceptance gate)
 import torch, ollada
-print("notebook version:", "{NOTEBOOK_VERSION}")
+NOTEBOOK_VERSION = "{NOTEBOOK_VERSION}"  # also used by the record cell — keep it a variable, not a literal (v0.1.0 bug)
+print("notebook version:", NOTEBOOK_VERSION)
 print("ollada version:", ollada.__version__)
 assert torch.cuda.is_available(), "no CUDA — set the runtime to T4 GPU first"
 name = torch.cuda.get_device_name(0)
@@ -102,6 +103,11 @@ def main():
         },
         "cells": [md_cell(s) if kind == "markdown" else code_cell(s) for kind, s in CELLS],
     }
+    # Regression guard for the v0.1.0 bug: the record cell references
+    # NOTEBOOK_VERSION, so an earlier cell must define it as a variable.
+    all_src = "\n".join(src for _, src in CELLS)
+    assert "NOTEBOOK_VERSION = " in all_src, "NOTEBOOK_VERSION variable never defined"
+    assert '"notebook_version": NOTEBOOK_VERSION' in all_src
     out = Path(__file__).parent.parent / "notebooks" / "verify_dream_t4.ipynb"
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(nb, indent=1), encoding="utf-8")
