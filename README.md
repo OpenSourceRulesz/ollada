@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/logo.png" width="150" alt="ollada — the pig. An ollada is a Catalan pork stew; Ollama has the llama, ollada has the pig.">
+  <img src="docs/assets/logo-badge.png" width="150" alt="ollada — the pig. An ollada is a Catalan pork stew; Ollama has the llama, ollada has the pig.">
 </p>
 
 <h1 align="center">ollada</h1>
