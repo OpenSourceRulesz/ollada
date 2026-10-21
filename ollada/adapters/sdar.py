@@ -41,6 +41,15 @@ locally against transformers 4.53.3 before the fix — see git history):
    the module-level wrapper for the identical eager flex_attention call
    after load.
 
+4. **Its outer forward silently drops the KV cache.** `SDARForCausalLM.
+   forward` accepts `past_key_values` but its call into the inner model
+   never passes it — every call starts with a fresh cache, so the
+   reference loop dies at the first decode block (mask expects the prefix
+   KV, attention sees only the current block). The adapter's loop
+   therefore drives the inner model (`model.model`) plus `lm_head`
+   directly, which is the API that actually accepts the cache and
+   `store_kv`.
+
 Which repairs were applied is recorded on the adapter as `load_notes` and
 belongs in any verification record for this family.
 
@@ -245,6 +254,21 @@ def _decompile_flex_attention(model) -> bool:
         return False
 
 
+
+def _forward_logits(model, input_ids, block_mask, position_ids, cache, store_kv):
+    """Drive SDAR's inner model + lm_head directly (repair 4): the outer
+    forward drops past_key_values, the inner one accepts it."""
+    out = model.model(
+        input_ids=input_ids,
+        attention_mask=block_mask,
+        position_ids=position_ids,
+        past_key_values=cache,
+        use_cache=True,
+        store_kv=store_kv,
+    )
+    return model.lm_head(out.last_hidden_state)
+
+
 @torch.no_grad()
 def _block_diffusion_generate(
     model,
@@ -283,12 +307,12 @@ def _block_diffusion_generate(
     prefill_length = prefill_blocks * block_length
 
     if prefill_length > 0:
-        model(
+        _forward_logits(
+            model,
             x[:, :prefill_length],
-            attention_mask=_to_block_mask(attn_mask[:, :prefill_length, :prefill_length]),
-            position_ids=position_ids[:, :prefill_length],
-            past_key_values=past_key_values,
-            use_cache=True,
+            _to_block_mask(attn_mask[:, :prefill_length, :prefill_length]),
+            position_ids[:, :prefill_length],
+            past_key_values,
             store_kv=True,
         )
 
@@ -302,23 +326,13 @@ def _block_diffusion_generate(
         for step in range(denoising_steps + 1):
             mask_index = cur_x == mask_id
             if mask_index.sum() == 0:
-                model(
-                    cur_x,
-                    attention_mask=cur_attn,
-                    position_ids=cur_pos,
-                    past_key_values=past_key_values,
-                    use_cache=True,
-                    store_kv=True,
+                _forward_logits(
+                    model, cur_x, cur_attn, cur_pos, past_key_values, store_kv=True
                 )
                 break
-            logits = model(
-                cur_x,
-                attention_mask=cur_attn,
-                position_ids=cur_pos,
-                past_key_values=past_key_values,
-                use_cache=True,
-                store_kv=False,
-            ).logits
+            logits = _forward_logits(
+                model, cur_x, cur_attn, cur_pos, past_key_values, store_kv=False
+            )
             x0, x0_p = _sample(logits, temperature=temperature, top_k=top_k, top_p=top_p)
 
             if remasking_strategy == "low_confidence_dynamic":
@@ -369,7 +383,9 @@ class SdarAdapter(BaseAdapter):
         self.tokenizer = AutoTokenizer.from_pretrained(local_dir, trust_remote_code=True)
         kwargs = {
             "trust_remote_code": True,
-            "torch_dtype": _DTYPES.get(recipe.dtype, torch.float16),
+            # transformers>=4.57 renamed torch_dtype -> dtype (deprecation
+            # warning otherwise); SDAR's env guarantees >=4.57.
+            "dtype": _DTYPES.get(recipe.dtype, torch.float16),
         }
         qc = quantization_config(recipe.quant_default)
         if qc is not None:
