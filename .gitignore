@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 dist/
 *.egg-info/
+
+# generated site (scripts/build_site.py output; deployed from gh-pages)
+site/
