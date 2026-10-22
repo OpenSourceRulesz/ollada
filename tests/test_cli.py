@@ -29,3 +29,17 @@ def test_show_prints_recipe_and_honest_verification_state(capsys):
 def test_show_unknown_model_is_a_clean_error(capsys):
     assert main(["show", "nope:1b"]) == 2
     assert "not on the shelf" in capsys.readouterr().err
+
+
+def test_show_includes_a_fit_line(capsys):
+    assert main(["show", "dream:7b"]) == 0
+    assert "fit here:" in capsys.readouterr().out
+
+
+def test_recommend_lists_the_shelf_with_verdicts(capsys):
+    assert main(["recommend"]) == 0
+    out = capsys.readouterr().out
+    for name in ("dream:7b", "sdar:4b", "diffcoder:8b"):
+        assert name in out
+    assert "VERDICT" in out
+    assert "9.80" in out  # dream's verified peak is quoted with its source

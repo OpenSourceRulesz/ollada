@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import time
 
-from ollada import __version__
+from ollada import __version__, fit
 from ollada.recipes import RecipeError, load_catalog
 from ollada.runtime.manager import ModelManager
 
@@ -49,10 +49,14 @@ def create_app(manager: ModelManager | None = None):
     app = FastAPI(title="ollada", version=__version__)
 
     def run_chat(model: str, messages: list[dict], options: dict | None):
+        opts = dict(options or {})
+        force = opts.pop("force", False) is True  # fit-check override, not a gen param
         try:
-            return manager.chat(model, messages, options)
+            return manager.chat(model, messages, opts or None, force=force)
         except RecipeError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except fit.FitError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         except Exception as exc:  # adapter load/generation failure
             raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
 

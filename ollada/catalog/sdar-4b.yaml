@@ -26,6 +26,7 @@ verified:
   hardware: "Tesla T4 (Colab, High-RAM runtime)"
   tokens_per_sec: 12.3     # median of full-length runs (range 9.5-18.9 canvas tok/s); the one-word instruction probe finished in 1.2s via early stop and is excluded
   vram_gb: 8.87            # peak during load + generation
+  min_host_ram_gb: 16      # observed floor, NOT a measured minimum: the load ran out of host RAM on Colab's standard (~13GB) runtime and succeeded on High-RAM; 16 is the prudent floor the fit check enforces
   load_seconds: 45.1
   date: "2026-10-21"
   notes: "Verified WITH ollada's load repairs active (torch RMSNorm fallback for flash_attn, authors' fused file restored from GitHub, BlockMask loop, eager flex attention, inner-model drive — see adapters/sdar.py). Quality at recipe defaults: math correct with clean steps; Fibonacci correct and runnable (better than dream:7b's garbled attempt); 3-item list complete (dream truncated its own); one-word instruction probe answered exactly 'Paris'. Speed is eager-flex-bound on T4 (scores matrix materialized); compiled flex is a Phase 2 revisit. Colab note: the standard-RAM T4 runtime was not enough during load — High-RAM runtime worked; GPU VRAM itself peaked at only 8.87GB."

@@ -1,4 +1,4 @@
-"""ollada CLI — list / show / pull / run / serve / ps / rm.
+"""ollada CLI — list / show / pull / run / serve / ps / rm / recommend.
 
 The base install is dependency-light (pyyaml only). GPU work needs
 `pip install "ollada[gpu]"`; serving needs `pip install "ollada[server]"`.
@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from ollada import __version__
+from ollada import __version__, fit, measurements
 from ollada.recipes import RecipeError, get_recipe, load_catalog
 
 GPU_HINT = 'this command needs the GPU stack: pip install "ollada[gpu]"'
@@ -44,11 +44,28 @@ def _cmd_show(args) -> int:
         print(f"verified:    {r.verified}")
     else:
         print("verified:    no — defaults are provisional until a real-load run (PLAN.md §7)")
+    record = measurements.load_record(r.name)
+    if record:
+        n = record["observations"]
+        print(
+            f"measured here: peak {record['peak_vram_gb']:.2f} GB on "
+            f"{record.get('hardware') or 'this machine'} "
+            f"({n} observation{'s' if n != 1 else ''}, updated {record['updated']})"
+        )
+    report = fit.assess(r)
+    print(f"fit here:    {report.summary()}")
+    for note in report.notes:
+        print(f"             note: {note}")
     return 0
 
 
 def _cmd_pull(args) -> int:
     r = get_recipe(args.name)
+    report = fit.assess(r)
+    if report.verdict in (fit.TIGHT, fit.WONT_FIT):
+        print(f"fit warning: {report.summary()}", file=sys.stderr)
+        for note in report.notes:
+            print(f"  note: {note}", file=sys.stderr)
     try:
         from huggingface_hub import snapshot_download
     except ImportError:
@@ -70,7 +87,9 @@ def _cmd_run(args) -> int:
 
     manager = ModelManager()
     if args.prompt:
-        result = manager.chat(args.name, [{"role": "user", "content": args.prompt}])
+        result = manager.chat(
+            args.name, [{"role": "user", "content": args.prompt}], force=args.force
+        )
         print(result.text)
         return 0
     print(f"{args.name} — type a message, Ctrl-C to quit")
@@ -81,11 +100,31 @@ def _cmd_run(args) -> int:
             if not text:
                 continue
             history.append({"role": "user", "content": text})
-            result = manager.chat(args.name, history)
+            result = manager.chat(args.name, history, force=args.force)
             history.append({"role": "assistant", "content": result.text})
             print(result.text)
     except (KeyboardInterrupt, EOFError):
         print()
+    return 0
+
+
+def _cmd_recommend(_args) -> int:
+    hw = fit.detect_hardware()
+    if hw.gpu_name:
+        vram = f"{hw.vram_total_gb:.1f} GB VRAM" if hw.vram_total_gb is not None else "VRAM unknown"
+        print(f"this machine: {hw.gpu_name} — {vram}")
+    else:
+        print("this machine: no GPU detected — verdicts unavailable, peaks shown for reference")
+    if hw.ram_total_gb is not None:
+        print(f"host RAM: {hw.ram_total_gb:.1f} GB")
+    print()
+    print(f"{'NAME':<16} {'VERDICT':<10} {'PEAK GB':<9} SOURCE")
+    for r in load_catalog():
+        report = fit.assess(r, hardware=hw)
+        peak = f"{report.peak_gb:.2f}" if report.peak_gb is not None else "—"
+        print(f"{r.name:<16} {report.verdict:<10} {peak:<9} {report.peak_source}")
+        for note in report.notes:
+            print(f"{'':<16} note: {note}")
     return 0
 
 
@@ -153,7 +192,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("run", help="chat with a model (one-shot with a prompt arg)")
     p.add_argument("name")
     p.add_argument("prompt", nargs="?")
+    p.add_argument("--force", action="store_true", help="load even if the fit check refuses")
     p.set_defaults(fn=_cmd_run)
+
+    sub.add_parser("recommend", help="which shelf models fit this machine").set_defaults(
+        fn=_cmd_recommend
+    )
 
     p = sub.add_parser("serve", help="run the local API daemon")
     p.add_argument("--host", default="127.0.0.1")
@@ -181,6 +225,9 @@ def main(argv=None) -> int:
         return args.fn(args)
     except RecipeError as exc:
         print(f"error: {exc}", file=sys.stderr)
+        return 2
+    except fit.FitError as exc:
+        print(f"fit check: {exc}", file=sys.stderr)
         return 2
 
 

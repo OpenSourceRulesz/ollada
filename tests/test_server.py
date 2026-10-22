@@ -33,8 +33,19 @@ class FakeAdapter:
 @pytest.fixture()
 def client(monkeypatch):
     import ollada.runtime.manager as manager_mod
+    from ollada import fit
 
     monkeypatch.setattr(manager_mod, "create_adapter", lambda recipe: FakeAdapter(recipe))
+    # Shape tests run on whatever machine pytest runs on; pin fit detection
+    # to a capable machine so they test HTTP shape, not the fit gate (the
+    # gate has its own tests in test_fit.py, including the 409 mapping).
+    monkeypatch.setattr(
+        fit,
+        "detect_hardware",
+        lambda refresh=False: fit.Hardware(
+            gpu_name="Test GPU", vram_total_gb=24.0, vram_free_gb=23.0, ram_total_gb=64.0
+        ),
+    )
     return TestClient(create_app(ModelManager()))
 
 
