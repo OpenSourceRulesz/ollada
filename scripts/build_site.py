@@ -165,7 +165,8 @@ def index_body(models: list[dict]) -> str:
 
 <h2 class="section" id="shelf">Library</h2>
 <p class="sub">A model earns its short name only after a real-load verification run —
-measured VRAM, speed, and quality on named hardware. No vendor benchmarks.</p>
+measured VRAM, speed, and quality on named hardware. No vendor benchmarks.
+<a href="library.html">Compare all models in the full catalog →</a></p>
 <div class="grid">{cards}
 </div>
 
@@ -217,6 +218,78 @@ Ollada hosts no registry).</p>
 """
 
 
+def library_body(models: list[dict]) -> str:
+    rows = []
+    for m in models:
+        v = m.get("verified", {})
+        g = m.get("generate", {})
+        rows.append(f"""<tr>
+  <td><a href="models/{slug(m['name'])}.html"><code>{esc(m['name'])}</code></a></td>
+  <td>{esc(m.get('task', ''))}</td>
+  <td>{esc(m.get('size_gb_bf16'))} GB</td>
+  <td>{esc(v.get('vram_gb'))} GB</td>
+  <td>{esc(v.get('tokens_per_sec'))}</td>
+  <td>{esc(m.get('quant_default', ''))}</td>
+  <td>{esc(v.get('date', ''))}</td>
+  <td>{esc(m.get('license', ''))}</td>
+</tr>""")
+    pulls = "\n".join(
+        f'    <div><span class="c">$</span> ollada pull {esc(m["name"])}</div>'
+        for m in models)
+    return f"""
+<div class="modelhead">
+  <h1 style="font-family:inherit;">Model catalog</h1>
+  <p>Every model on the shelf, with the numbers Ollada measured itself.
+     One page per model carries the full recipe and verification notes.</p>
+</div>
+<h2 class="section">The shelf</h2>
+<table>
+<tr><td class="k">Model</td><td class="k">Task</td><td class="k">Weights (bf16)</td>
+    <td class="k">Peak VRAM, measured</td><td class="k">Speed, canvas tok/s</td>
+    <td class="k">Default quant</td><td class="k">Verified</td><td class="k">License</td></tr>
+{"".join(rows)}
+</table>
+<p class="sub">VRAM and speed were measured through Ollada's own code on the hardware
+named on each model's page (Colab Tesla T4, 2026-10-21 — single-run samples,
+treated as measured floors, not laws). Desktop verification on the RTX 5060 Ti
+is the pre-launch re-check; T4 numbers are the conservative floor. Weights
+come from Hugging Face — Ollada hosts no registry.</p>
+<h2 class="section">Pull them</h2>
+<div class="term" style="margin:20px 0;">
+{pulls}
+</div>
+"""
+
+
+LIBRARY_MD = """# Ollada library
+
+The shelf: every model Ollada has verified through its own code. Numbers are
+measured on the hardware named — no vendor benchmarks.
+
+| Model | Task | Weights (bf16) | Peak VRAM, measured | Speed (canvas tok/s) | Default quant | Verified | License |
+|---|---|---|---|---|---|---|---|
+{rows}
+
+T4 numbers are the conservative floor; desktop verification (RTX 5060 Ti) is
+the pre-launch re-check. Weights come from Hugging Face — Ollada hosts no
+registry.
+
+Full recipes and verification notes live on each model's site page
+(https://opensourcerulesz.github.io/ollada/models/).
+"""
+
+
+def library_md(models: list[dict]) -> str:
+    rows = []
+    for m in models:
+        v = m.get("verified", {})
+        rows.append(
+            f"| `{m['name']}` | {m.get('task', '')} | {m.get('size_gb_bf16')} GB "
+            f"| {v.get('vram_gb')} GB | {v.get('tokens_per_sec')} "
+            f"| {m.get('quant_default', '')} | {v.get('date', '')} | {m.get('license', '')} |")
+    return LIBRARY_MD.format(rows="\n".join(rows))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=str(ROOT / "site"))
@@ -237,11 +310,14 @@ def main() -> int:
     (out / "index.html").write_text(PAGE.format(
         title="Ollada — the shelf for open-source diffusion language models",
         root="", body=index_body(models)))
+    (out / "library.html").write_text(PAGE.format(
+        title="Model catalog · Ollada", root="", body=library_body(models)))
     for m in models:
         (out / "models" / f"{slug(m['name'])}.html").write_text(PAGE.format(
             title=f"{m['name']} · Ollada", root="../", body=model_body(m)))
-    print(f"built {out}: index + {len(models)} model pages "
-          f"({', '.join(m['name'] for m in models)})")
+    (ROOT / "docs" / "LIBRARY.md").write_text(library_md(models))
+    print(f"built {out}: index + library + {len(models)} model pages "
+          f"({', '.join(m['name'] for m in models)}); wrote docs/LIBRARY.md")
     return 0
 
 
