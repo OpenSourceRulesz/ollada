@@ -309,3 +309,51 @@ def test_decompile_success_swaps_in_the_eager_call():
             )
         finally:
             sys.modules.pop("fake_sdar_modeling", None)
+
+
+def test_no_progress_bars_tolerates_missing_hub():
+    with _stubbed_sdar() as sdar:
+        # The stub environment has no huggingface_hub: the helper must
+        # degrade to a no-op, never break a load.
+        with sdar._no_progress_bars():
+            pass
+
+
+def test_quiet_load_suppresses_upstream_docstring_warning_only():
+    import warnings
+
+    with _stubbed_sdar() as sdar:
+        with warnings.catch_warnings(record=True) as seen:
+            warnings.simplefilter("always")
+            with sdar._quiet_load():
+                warnings.warn(
+                    "`store_kv` is part of SDARModel.forward's signature, "
+                    "but not documented. Make sure to add it to the docstring.",
+                    UserWarning,
+                )
+                warnings.warn("a warning that matters", UserWarning)
+        messages = [str(w.message) for w in seen]
+        assert messages == ["a warning that matters"]
+
+
+def test_silence_eager_flex_warnings():
+    import warnings
+
+    with _stubbed_sdar() as sdar:
+        with warnings.catch_warnings():
+            sdar._silence_eager_flex_warnings()
+            with warnings.catch_warnings(record=True) as seen:
+                warnings.warn(
+                    "flex_attention called without torch.compile() - "
+                    "this will use an unfused implementation",
+                    UserWarning,
+                )
+                warnings.warn(
+                    "return_lse is deprecated and will be removed in v2.10",
+                    FutureWarning,
+                )
+                warnings.warn("an unrelated warning", UserWarning)
+        messages = [str(w.message) for w in seen]
+        assert "an unrelated warning" in messages
+        assert not any("flex_attention" in m for m in messages)
+        assert not any("return_lse" in m for m in messages)

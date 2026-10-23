@@ -43,3 +43,42 @@ def test_recommend_lists_the_shelf_with_verdicts(capsys):
         assert name in out
     assert "VERDICT" in out
     assert "9.80" in out  # dream's verified peak is quoted with its source
+
+
+class _FakeStream:
+    def __init__(self, tty):
+        self._tty = tty
+        self.writes = []
+
+    def isatty(self):
+        return self._tty
+
+    def write(self, text):
+        self.writes.append(text)
+
+    def flush(self):
+        pass
+
+
+def test_thinking_indicator_animates_on_a_tty_and_clears():
+    import time
+
+    from ollada.cli import _Thinking
+
+    stream = _FakeStream(tty=True)
+    with _Thinking(stream=stream) as thinking:
+        time.sleep(0.6)
+    output = "".join(stream.writes)
+    assert "working" in output
+    assert thinking.elapsed >= 0.6
+    # The line is cleared on exit so the answer prints on a clean row.
+    assert stream.writes[-1].strip() == ""
+
+
+def test_thinking_indicator_is_silent_when_piped():
+    from ollada.cli import _Thinking
+
+    stream = _FakeStream(tty=False)
+    with _Thinking(stream=stream):
+        pass
+    assert stream.writes == []

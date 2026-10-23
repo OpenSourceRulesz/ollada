@@ -111,6 +111,7 @@ import sys
 import time
 import types
 import urllib.request
+import warnings
 from importlib.machinery import ModuleSpec
 from pathlib import Path
 
@@ -438,7 +439,8 @@ def _prepare_local_dir(source: str) -> tuple[str, list[str]]:
     from huggingface_hub import snapshot_download
     from huggingface_hub.constants import HF_HOME
 
-    snapshot = Path(snapshot_download(source))
+    with _no_progress_bars():
+        snapshot = Path(snapshot_download(source))
     if (snapshot / _FUSED_FILENAME).exists():
         return str(snapshot), []
 
@@ -538,6 +540,83 @@ def _to_block_mask(mask3d: torch.Tensor):
     )
 
 
+@contextlib.contextmanager
+def _no_progress_bars():
+    """Suppress huggingface_hub's download progress bars for a call.
+
+    The snapshot is ollada's own download step; a library progress bar
+    is not ollada's UI (the CLI shows its own working indicator).
+    Falls back to a no-op where the hub helper is unavailable.
+    """
+    try:
+        from huggingface_hub.utils import disable_progress_bars
+    except Exception:
+        yield
+        return
+    with disable_progress_bars():
+        yield
+
+
+@contextlib.contextmanager
+def _quiet_load():
+    """Silence upstream's load-time console noise for the load window.
+
+    Two sources, both warn-only and both unactionable for the user:
+    transformers logs a docstring complaint about upstream's own
+    modeling file (`store_kv` is in SDARModel.forward's signature but
+    undocumented — an upstream cosmetic defect), and assorted
+    deprecation chatter. Everything that matters about a load is in
+    the adapter's load_notes; the prints add nothing. Transformers'
+    verbosity is restored on exit; the one warnings filter is scoped
+    to the window by catch_warnings.
+    """
+    hf_logging = None
+    prev_verbosity = None
+    try:
+        from transformers.utils import logging as _hf_logging
+
+        prev_verbosity = _hf_logging.get_verbosity()
+        _hf_logging.set_verbosity_error()
+        hf_logging = _hf_logging
+    except Exception:
+        hf_logging = None
+    try:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r".*is part of .*forward's signature, but not documented.*",
+            )
+            yield
+    finally:
+        if hf_logging is not None and prev_verbosity is not None:
+            try:
+                hf_logging.set_verbosity(prev_verbosity)
+            except Exception:
+                pass
+
+
+def _silence_eager_flex_warnings() -> None:
+    """Drop torch's two flex-attention warnings for this process.
+
+    They fire on every generation through the eager path this adapter
+    installs on purpose: the "called without torch.compile" notice
+    (we chose eager — the reminder is redundant once chosen) and the
+    return_lse deprecation (torch-internal API churn surfaced through
+    that same call). The filters match those two messages only;
+    everything else still warns.
+    """
+    warnings.filterwarnings(
+        "ignore",
+        message=r"flex_attention called without torch\.compile.*",
+        category=UserWarning,
+    )
+    warnings.filterwarnings(
+        "ignore",
+        message=r"return_lse is deprecated.*",
+        category=FutureWarning,
+    )
+
+
 def _decompile_flex_attention(model) -> bool:
     """Swap SDAR's torch.compile(max-autotune) flex wrapper for the same
     call, eager. Returns True when the swap was applied.
@@ -558,6 +637,7 @@ def _decompile_flex_attention(model) -> bool:
             return flex_attention(query, key, value, block_mask=attention_mask, **kwargs)
 
         module.fused_flex_attention = eager_flex_attention
+        _silence_eager_flex_warnings()
     except Exception as exc:
         raise AdapterError(
             "SDAR flex-attention decompile failed: could not swap the "
@@ -753,7 +833,7 @@ class SdarAdapter(BaseAdapter):
                 "resolution would import Inductor's triton chain "
                 "against the stub)"
             )
-        with load_window:
+        with load_window, _quiet_load():
             self.tokenizer = AutoTokenizer.from_pretrained(
                 local_dir, trust_remote_code=True
             )
@@ -763,6 +843,9 @@ class SdarAdapter(BaseAdapter):
             )
             kwargs = {
                 "trust_remote_code": True,
+                # No library progress bars in ollada's UI; the CLI
+                # shows its own working indicator during the load.
+                "disable_tqdm": True,
                 # transformers>=4.57 renamed torch_dtype -> dtype
                 # (deprecation warning otherwise); SDAR's env
                 # guarantees >=4.57.

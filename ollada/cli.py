@@ -9,11 +9,69 @@ from __future__ import annotations
 
 import argparse
 import sys
+import threading
+import time
 
 from ollada import __version__, fit, measurements
 from ollada.recipes import RecipeError, get_recipe, load_catalog
 
 GPU_HINT = 'this command needs the GPU stack: pip install "ollada[gpu]"'
+
+
+class _Thinking:
+    """A live "working… Ns" line on stderr while a blocking call runs.
+
+    Generation can take seconds to minutes (especially on CPU); a
+    silent terminal reads as a hang. The indicator ticks on a daemon
+    thread, only when stderr is a real terminal — piped output stays
+    clean, and the answer itself always goes to stdout untouched.
+    `elapsed` remains readable after the block exits, for the timing
+    footer.
+    """
+
+    def __init__(self, stream=None):
+        self._stream = stream if stream is not None else sys.stderr
+        self._stop = threading.Event()
+        self._thread = None
+        self._started = None
+
+    @property
+    def elapsed(self) -> float:
+        if self._started is None:
+            return 0.0
+        return time.monotonic() - self._started
+
+    def __enter__(self):
+        self._started = time.monotonic()
+        try:
+            tty = self._stream.isatty()
+        except Exception:
+            tty = False
+        if tty:
+            self._stream.write("\rworking… 0s ")
+            self._stream.flush()
+            self._thread = threading.Thread(target=self._spin, daemon=True)
+            self._thread.start()
+        return self
+
+    def _spin(self):
+        while not self._stop.wait(0.25):
+            try:
+                self._stream.write(f"\rworking… {self.elapsed:.0f}s ")
+                self._stream.flush()
+            except Exception:
+                return
+
+    def __exit__(self, *exc):
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=1.0)
+            try:
+                self._stream.write("\r" + " " * 24 + "\r")
+                self._stream.flush()
+            except Exception:
+                pass
+        return False
 
 
 def _cmd_list(_args) -> int:
@@ -87,10 +145,12 @@ def _cmd_run(args) -> int:
 
     manager = ModelManager()
     if args.prompt:
-        result = manager.chat(
-            args.name, [{"role": "user", "content": args.prompt}], force=args.force
-        )
+        with _Thinking() as thinking:
+            result = manager.chat(
+                args.name, [{"role": "user", "content": args.prompt}], force=args.force
+            )
         print(result.text)
+        print(f"({thinking.elapsed:.1f}s)", file=sys.stderr)
         return 0
     print(f"{args.name} — type a message, Ctrl-C to quit")
     history: list[dict] = []
@@ -100,9 +160,11 @@ def _cmd_run(args) -> int:
             if not text:
                 continue
             history.append({"role": "user", "content": text})
-            result = manager.chat(args.name, history, force=args.force)
+            with _Thinking() as thinking:
+                result = manager.chat(args.name, history, force=args.force)
             history.append({"role": "assistant", "content": result.text})
             print(result.text)
+            print(f"({thinking.elapsed:.1f}s)", file=sys.stderr)
     except (KeyboardInterrupt, EOFError):
         print()
     return 0
