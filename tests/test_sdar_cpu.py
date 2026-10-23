@@ -483,3 +483,29 @@ def test_watch_pieces_no_tentative_means_plain_masks():
     with _stubbed_sdar() as sdar:
         pieces = sdar._watch_pieces(_FakeTok(), [99, 99], mask_id=99, tentative={})
     assert pieces == [("", "mask"), ("", "mask")]
+
+
+def test_block_diffusion_generate_keeps_its_no_grad_decorator():
+    """Regression for the decorator theft of 2026-10-23: the watch
+    build inserted _watch_pieces between @torch.no_grad() and
+    _block_diffusion_generate, silently re-decorating the helper and
+    leaving generation grad-tracked — which eager flex_attention on
+    CPU rejects outright (it has no CPU backward). The sandbox suite
+    cannot execute torch, so the pin is structural: the decorator
+    line must directly precede the loop's def in the source."""
+    import pathlib
+
+    source = (
+        pathlib.Path(__file__).parent.parent / "ollada" / "adapters" / "sdar.py"
+    ).read_text(encoding="utf-8")
+    lines = source.splitlines()
+    for i, line in enumerate(lines):
+        if line.startswith("def _block_diffusion_generate("):
+            assert lines[i - 1].strip() == "@torch.no_grad()"
+            break
+    else:
+        raise AssertionError("_block_diffusion_generate not found")
+    for i, line in enumerate(lines):
+        if line.startswith("def _watch_pieces("):
+            assert lines[i - 1].strip() != "@torch.no_grad()"
+            break

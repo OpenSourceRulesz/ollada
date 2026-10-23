@@ -707,7 +707,6 @@ def _forward_logits(model, input_ids, mask, position_ids, cache, store_kv, mask_
     return model.lm_head(out.last_hidden_state)
 
 
-@torch.no_grad()
 def _watch_pieces(tokenizer, gen_ids, mask_id, tentative):
     """Build one watch-mode frame for the generated region.
 
@@ -734,6 +733,7 @@ def _watch_pieces(tokenizer, gen_ids, mask_id, tentative):
     return pieces
 
 
+@torch.no_grad()
 def _block_diffusion_generate(
     model,
     input_ids,
