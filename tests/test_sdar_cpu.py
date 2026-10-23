@@ -20,6 +20,9 @@ the pure load-plan helper and the flex-attention decompile contract:
 - The flash_attn stand-in also registers an SDPA flash_attn_func and
   loud stubs for the varlen / bert_padding names the pre-rename
   modeling revision imports but never calls.
+- When real triton is absent, an import stub lets the fused-loss
+  module (which imports triton at module level) load; its decorated
+  kernels raise loudly if ever called.
 """
 
 import contextlib
@@ -185,6 +188,40 @@ def test_flash_fallback_registers_sdpa_func_and_loud_stubs():
                 root.flash_attn_varlen_func()
             with pytest.raises(RuntimeError):
                 sys.modules["flash_attn.bert_padding"].pad_input()
+        finally:
+            for key, previous in saved.items():
+                if previous is None:
+                    sys.modules.pop(key, None)
+                else:
+                    sys.modules[key] = previous
+
+
+def test_triton_stub_registered_when_triton_absent():
+    with _stubbed_sdar() as sdar:
+        keys = ["triton", "triton.language"]
+        saved = {k: sys.modules.get(k) for k in keys}
+        try:
+            status = sdar._register_triton_stub()
+            if status == "real":
+                pytest.skip("real triton installed")
+            assert status.startswith("import-stub")
+            triton_mod = sys.modules["triton"]
+            # The import-time surface the fused-loss module needs:
+            # Config is called in a list comprehension, the arithmetic
+            # helpers are plain functions, and the decorators wrap the
+            # training kernels.
+            assert triton_mod.Config({}, num_warps=4) is None
+            assert triton_mod.next_power_of_2(5) == 8
+            assert triton_mod.cdiv(7, 2) == 4
+            with pytest.raises(RuntimeError):
+                triton_mod.jit(lambda: None)()
+            with pytest.raises(RuntimeError):
+                triton_mod.autotune(configs=[], key=[])(lambda: None)()
+            with pytest.raises(RuntimeError):
+                triton_mod.heuristics({})(lambda: None)()
+            # triton.language must tolerate annotation-time access
+            # (tl.constexpr is evaluated when kernel defs execute).
+            assert sys.modules["triton.language"].constexpr is not None
         finally:
             for key, previous in saved.items():
                 if previous is None:

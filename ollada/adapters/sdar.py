@@ -64,6 +64,15 @@ locally against transformers 4.53.3 before the fix — see git history):
    computes) plus loud stubs for the varlen / bert_padding names the
    older file imports but never calls.
 
+6. **Its fused-loss module imports triton at module level.** The
+   post-rename modeling imports the overlay-restored fused-loss file
+   (repair 2), which does `import triton` and decorates its training
+   kernels with it. Triton ships no Windows build, and the loss class
+   is never used at inference, so when real triton is absent the
+   adapter registers an import stub: the decorators let the module
+   load, while any actual kernel call raises loudly. (The pre-rename
+   modeling does not import the fused module at all.)
+
 CPU loads: when no CUDA device is present, the adapter loads on CPU at
 bfloat16 (see _resolve_load_plan) — the recipe's float16 is a T4-safe GPU
 dtype, not a CPU-viable one. This is a probe path, not a verified
@@ -203,6 +212,76 @@ def _register_flash_attn_fallback() -> str:
     bert_padding.unpad_input = _unavailable_flash_stub
     root.bert_padding = bert_padding
     return "torch-fallback"
+
+
+def _triton_kernel_raiser(*_args, **_kwargs):
+    raise RuntimeError(
+        "triton is an import-only stub in this environment (no triton "
+        "build exists for this platform); the SDAR fused-loss kernels "
+        "it decorates are training-only and must not be called at "
+        "inference"
+    )
+
+
+def _triton_jit(fn=None, **_kwargs):
+    if fn is None:
+        return lambda _f: _triton_kernel_raiser
+    return _triton_kernel_raiser
+
+
+def _triton_decorator_factory(*_args, **_kwargs):
+    return lambda _f: _triton_kernel_raiser
+
+
+class _TritonLanguageStub:
+    """Attribute-tolerant stand-in for triton.language.
+
+    Kernel bodies reference tl.* only when a kernel is compiled or
+    called, but tl.constexpr appears in signature annotations that are
+    evaluated at def time — so attribute access must succeed while any
+    actual use stays inert.
+    """
+
+    def __getattr__(self, _name):
+        return self
+
+    def __call__(self, *_args, **_kwargs):
+        return self
+
+
+def _register_triton_stub() -> str:
+    """Make `import triton` survivable where no triton build exists.
+
+    See docstring repair 6. Returns "real" if triton is importable,
+    otherwise registers the stub and describes it.
+    """
+    try:
+        import triton  # noqa: F401
+
+        return "real"
+    except ImportError:
+        pass
+
+    from importlib.machinery import ModuleSpec
+
+    def _mod(name: str) -> types.ModuleType:
+        module = types.ModuleType(name)
+        module.__spec__ = ModuleSpec(name, loader=None)
+        module.__path__ = []
+        sys.modules[name] = module
+        return module
+
+    root = _mod("triton")
+    root.jit = _triton_jit
+    root.autotune = _triton_decorator_factory
+    root.heuristics = _triton_decorator_factory
+    root.Config = lambda *_a, **_k: None
+    root.next_power_of_2 = lambda n: 1 << (n - 1).bit_length()
+    root.cdiv = lambda a, b: (a + b - 1) // b
+    language = _mod("triton.language")
+    language.__getattr__ = lambda _name: _TritonLanguageStub()
+    root.language = language
+    return "import-stub (fused-loss module is training-only; kernels raise if called)"
 
 
 def _register_kwargs_alias(utils_module=None) -> str | None:
@@ -585,6 +664,7 @@ class SdarAdapter(BaseAdapter):
         alias_note = _register_kwargs_alias()
         if alias_note is not None:
             notes.append(alias_note)
+        notes.append(f"triton: {_register_triton_stub()}")
         local_dir, overlay_notes = _prepare_local_dir(recipe.source)
         notes.extend(overlay_notes)
         self.load_notes = notes
