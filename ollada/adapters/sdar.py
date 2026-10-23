@@ -230,6 +230,11 @@ def _register_kwargs_alias(utils_module=None) -> str | None:
     )
 
 
+def _mask_contract_from_source(source: str) -> str:
+    """Pure: the mask dialect a modeling source speaks."""
+    return "blockmask" if "def fused_flex_attention" in source else "tensor"
+
+
 def _detect_mask_contract(model) -> str:
     """Which mask dialect the loaded SDAR modeling revision speaks.
 
@@ -238,11 +243,22 @@ def _detect_mask_contract(model) -> str:
     post-rename revision, SDAR-4B). "tensor": no such wrapper — the
     attention consumes a bool tensor mask directly (the pre-rename
     revision, SDAR-1.7B). See docstring repair 5.
+
+    The dialect is read from the modeling module's SOURCE, never its
+    live namespace: _decompile_flex_attention assigns
+    module.fused_flex_attention at load, so a namespace check made
+    after that step finds the adapter's own assignment and reports
+    "blockmask" for every revision (the Dell run #4 bug, 2026-10-23).
     """
     module = sys.modules.get(type(model).__module__)
-    if module is not None and hasattr(module, "fused_flex_attention"):
-        return "blockmask"
-    return "tensor"
+    source = ""
+    if module is not None:
+        try:
+            with open(module.__file__, encoding="utf-8") as fh:
+                source = fh.read()
+        except (AttributeError, OSError):
+            source = ""
+    return _mask_contract_from_source(source)
 
 
 def _link_or_copy(src: Path, dst: Path) -> None:
@@ -599,10 +615,10 @@ class SdarAdapter(BaseAdapter):
         self.model = AutoModelForCausalLM.from_pretrained(local_dir, **kwargs)
         self.model.eval()
         notes.append(f"loaded dtype: {self.model.dtype}")
-        if _decompile_flex_attention(self.model):
-            self.load_notes.append("flex attention: eager (compile wrapper swapped out)")
         self._mask_contract = _detect_mask_contract(self.model)
         notes.append(f"mask contract: {self._mask_contract}")
+        if self._mask_contract == "blockmask" and _decompile_flex_attention(self.model):
+            self.load_notes.append("flex attention: eager (compile wrapper swapped out)")
         gen_cfg = GenerationConfig.from_pretrained(local_dir)
         eos = gen_cfg.eos_token_id
         self._stopping_ids = [eos] if isinstance(eos, int) else list(eos or [])

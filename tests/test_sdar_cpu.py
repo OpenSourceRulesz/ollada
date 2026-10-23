@@ -13,9 +13,10 @@ the pure load-plan helper and the flex-attention decompile contract:
 - The fused-loss restore tries the flavor's own GitHub folder first,
   then the byte-identical 4B copy (upstream carries no 1.7B folder, so
   the flavor-templated URL 404s for SDAR-1.7B-Chat).
-- The mask contract is detected from the loaded modeling module:
-  a module-level fused_flex_attention wrapper means the BlockMask
-  dialect; its absence means the bool-tensor dialect.
+- The mask contract is read from the loaded modeling module's SOURCE
+  (a module-level fused_flex_attention definition means the BlockMask
+  dialect; its absence means the bool-tensor dialect) — never from the
+  live namespace, which the flex decompile itself mutates.
 - The flash_attn stand-in also registers an SDPA flash_attn_func and
   loud stubs for the varlen / bert_padding names the pre-rename
   modeling revision imports but never calls.
@@ -122,37 +123,47 @@ def _fake_model(module_name):
     return type("FakeModel", (), {"__module__": module_name})()
 
 
-def test_mask_contract_blockmask_when_fused_flex_wrapper_present():
+def test_mask_contract_detection_reads_source_not_namespace(tmp_path):
     with _stubbed_sdar() as sdar:
-        module = types.ModuleType("fake_modeling_blockmask")
-        module.fused_flex_attention = lambda *a, **k: None
-        sys.modules["fake_modeling_blockmask"] = module
+        # Regression pin for Dell run #4: _decompile_flex_attention
+        # ASSIGNS module.fused_flex_attention at load, so a namespace
+        # check made afterwards reports "blockmask" for every revision.
+        # Detection must read the modeling source. The tensor fake
+        # below deliberately carries the poisoned attribute.
+        blockmask_src = tmp_path / "modeling_blockmask.py"
+        blockmask_src.write_text(
+            "def fused_flex_attention(q, k, v, attention_mask):\n    pass\n"
+        )
+        tensor_src = tmp_path / "modeling_tensor.py"
+        tensor_src.write_text("class SDARAttention:\n    pass\n")
+        names = ["fake_modeling_blockmask", "fake_modeling_tensor"]
         try:
+            for name, path, poison in (
+                ("fake_modeling_blockmask", blockmask_src, False),
+                ("fake_modeling_tensor", tensor_src, True),
+            ):
+                module = types.ModuleType(name)
+                module.__file__ = str(path)
+                if poison:
+                    module.fused_flex_attention = lambda *a, **k: None
+                sys.modules[name] = module
             assert (
                 sdar._detect_mask_contract(_fake_model("fake_modeling_blockmask"))
                 == "blockmask"
             )
-        finally:
-            sys.modules.pop("fake_modeling_blockmask", None)
-
-
-def test_mask_contract_tensor_without_fused_flex_wrapper():
-    with _stubbed_sdar() as sdar:
-        module = types.ModuleType("fake_modeling_tensor")
-        sys.modules["fake_modeling_tensor"] = module
-        try:
             assert (
                 sdar._detect_mask_contract(_fake_model("fake_modeling_tensor"))
                 == "tensor"
             )
             # A module that cannot be found at all also falls to tensor:
-            # the wrapper's presence is the only BlockMask evidence.
+            # the wrapper's definition is the only BlockMask evidence.
             assert (
                 sdar._detect_mask_contract(_fake_model("fake_modeling_missing"))
                 == "tensor"
             )
         finally:
-            sys.modules.pop("fake_modeling_tensor", None)
+            for name in names:
+                sys.modules.pop(name, None)
 
 
 def test_flash_fallback_registers_sdpa_func_and_loud_stubs():
