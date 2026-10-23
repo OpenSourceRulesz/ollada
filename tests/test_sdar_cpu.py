@@ -23,6 +23,10 @@ the pure load-plan helper and the flex-attention decompile contract:
 - When real triton is absent, an import stub lets the fused-loss
   module (which imports triton at module level) load; its decorated
   kernels raise loudly if ever called.
+- During a triton-less load, torch.compile is neutralized to an
+  identity decorator (restored afterwards, even on error), because
+  the modeling's @torch.compile decorator would otherwise resolve
+  Inductor's backend against the triton stub at import time.
 """
 
 import contextlib
@@ -228,6 +232,28 @@ def test_triton_stub_registered_when_triton_absent():
                     sys.modules.pop(key, None)
                 else:
                     sys.modules[key] = previous
+
+
+def test_compile_neutralized_identity_and_restore():
+    with _stubbed_sdar() as sdar:
+        original = object()
+        fake_torch = types.SimpleNamespace(compile=original)
+
+        def fn():
+            return "ran"
+
+        with sdar._compile_neutralized(fake_torch):
+            assert fake_torch.compile is not original
+            # The modeling's usage: @torch.compile(fullgraph=True, ...)
+            assert fake_torch.compile(fullgraph=True, mode="x")(fn) is fn
+            # Bare form: @torch.compile
+            assert fake_torch.compile(fn) is fn
+        assert fake_torch.compile is original
+        # Restoration holds when the window raises.
+        with pytest.raises(ValueError):
+            with sdar._compile_neutralized(fake_torch):
+                raise ValueError("boom")
+        assert fake_torch.compile is original
 
 
 def test_fused_candidate_urls_flavor_first_then_4b_fallback():

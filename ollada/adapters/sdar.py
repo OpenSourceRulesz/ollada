@@ -73,6 +73,20 @@ locally against transformers 4.53.3 before the fix — see git history):
    load, while any actual kernel call raises loudly. (The pre-rename
    modeling does not import the fused module at all.)
 
+7. **Its @torch.compile decorator resolves the compiler backend at
+   import time — against whatever `triton` it can find.** Merely
+   decorating the flex wrapper makes Dynamo load Inductor's
+   triton_compat, whose guard is `import triton`: on a truly
+   triton-less machine the import fails and torch skips the chain,
+   but against the repair-6 stub the import *succeeds* and the
+   unguarded `from triton.compiler import CompiledKernel` behind it
+   raises. On triton-less platforms the adapter therefore neutralizes
+   torch.compile for the duration of the load (identity decorator,
+   restored after). Nothing is lost: the decorated function's body
+   is the same eager flex call the adapter installs in its place
+   (repair 3), and the compiled wrapper was always going to be
+   swapped out before its first call.
+
 CPU loads: when no CUDA device is present, the adapter loads on CPU at
 bfloat16 (see _resolve_load_plan) — the recipe's float16 is a T4-safe GPU
 dtype, not a CPU-viable one. This is a probe path, not a verified
@@ -86,6 +100,7 @@ UNVERIFIED in ollada until a real-load gate passes on a T4.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import sys
 import time
@@ -282,6 +297,35 @@ def _register_triton_stub() -> str:
     language.__getattr__ = lambda _name: _TritonLanguageStub()
     root.language = language
     return "import-stub (fused-loss module is training-only; kernels raise if called)"
+
+
+@contextlib.contextmanager
+def _compile_neutralized(torch_module=None):
+    """Replace torch.compile with an identity decorator for the window.
+
+    See docstring repair 7: on triton-less platforms, SDAR's modeling
+    executing its @torch.compile decorator during from_pretrained
+    makes Dynamo resolve its backend, which imports Inductor's triton
+    chain against the repair-6 stub and raises. The decorated
+    function's body is the eager flex call the adapter installs after
+    load, so an identity decorator is semantically exact here. The
+    original torch.compile is restored on exit, even on error.
+    """
+    if torch_module is None:
+        import torch as torch_module
+
+    original = torch_module.compile
+
+    def _identity_compile(fn=None, *_args, **_kwargs):
+        if fn is None:
+            return lambda f: f
+        return fn
+
+    torch_module.compile = _identity_compile
+    try:
+        yield
+    finally:
+        torch_module.compile = original
 
 
 def _register_kwargs_alias(utils_module=None) -> str | None:
@@ -664,35 +708,55 @@ class SdarAdapter(BaseAdapter):
         alias_note = _register_kwargs_alias()
         if alias_note is not None:
             notes.append(alias_note)
-        notes.append(f"triton: {_register_triton_stub()}")
+        triton_status = _register_triton_stub()
+        notes.append(f"triton: {triton_status}")
         local_dir, overlay_notes = _prepare_local_dir(recipe.source)
         notes.extend(overlay_notes)
         self.load_notes = notes
 
-        self.tokenizer = AutoTokenizer.from_pretrained(local_dir, trust_remote_code=True)
-        qc = quantization_config(recipe.quant_default)
-        plan = _resolve_load_plan(torch.cuda.is_available(), recipe.dtype, qc is not None)
-        kwargs = {
-            "trust_remote_code": True,
-            # transformers>=4.57 renamed torch_dtype -> dtype (deprecation
-            # warning otherwise); SDAR's env guarantees >=4.57.
-            "dtype": _DTYPES.get(plan["dtype"], torch.float16),
-        }
-        if qc is not None:
-            kwargs["quantization_config"] = qc
-        if plan["device_map"] is not None:
-            # Place layers directly on the GPU during load; a CPU load
-            # followed by .cuda() doubles peak host+device traffic and
-            # muddies OOM diagnosis. (The CPU plan has no device_map at
-            # all — the model stays on CPU.)
-            kwargs["device_map"] = plan["device_map"]
-        if plan["cpu"]:
+        # On triton-less platforms the modeling's @torch.compile
+        # decorator must not execute as-is during the load (repair 7).
+        load_window = (
+            _compile_neutralized()
+            if triton_status != "real"
+            else contextlib.nullcontext()
+        )
+        if triton_status != "real":
             notes.append(
-                "cpu load: no CUDA — dtype forced to bfloat16 (recipe "
-                f"dtype {recipe.dtype} is not CPU-viable); no device_map, "
-                "model stays on CPU"
+                "torch.compile: neutralized during load (backend "
+                "resolution would import Inductor's triton chain "
+                "against the stub)"
             )
-        self.model = AutoModelForCausalLM.from_pretrained(local_dir, **kwargs)
+        with load_window:
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                local_dir, trust_remote_code=True
+            )
+            qc = quantization_config(recipe.quant_default)
+            plan = _resolve_load_plan(
+                torch.cuda.is_available(), recipe.dtype, qc is not None
+            )
+            kwargs = {
+                "trust_remote_code": True,
+                # transformers>=4.57 renamed torch_dtype -> dtype
+                # (deprecation warning otherwise); SDAR's env
+                # guarantees >=4.57.
+                "dtype": _DTYPES.get(plan["dtype"], torch.float16),
+            }
+            if qc is not None:
+                kwargs["quantization_config"] = qc
+            if plan["device_map"] is not None:
+                # Place layers directly on the GPU during load; a CPU
+                # load followed by .cuda() doubles peak host+device
+                # traffic and muddies OOM diagnosis. (The CPU plan
+                # has no device_map at all — the model stays on CPU.)
+                kwargs["device_map"] = plan["device_map"]
+            if plan["cpu"]:
+                notes.append(
+                    "cpu load: no CUDA — dtype forced to bfloat16 "
+                    f"(recipe dtype {recipe.dtype} is not CPU-viable); "
+                    "no device_map, model stays on CPU"
+                )
+            self.model = AutoModelForCausalLM.from_pretrained(local_dir, **kwargs)
         self.model.eval()
         notes.append(f"loaded dtype: {self.model.dtype}")
         self._mask_contract = _detect_mask_contract(self.model)
