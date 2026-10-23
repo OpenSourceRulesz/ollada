@@ -10,6 +10,9 @@ the pure load-plan helper and the flex-attention decompile contract:
 - No CUDA, no quantization -> CPU plan: bfloat16, no device_map.
 - A failed flex-attention decompile raises loudly instead of silently
   keeping SDAR's torch.compile(max-autotune) wrapper.
+- The fused-loss restore tries the flavor's own GitHub folder first,
+  then the byte-identical 4B copy (upstream carries no 1.7B folder, so
+  the flavor-templated URL 404s for SDAR-1.7B-Chat).
 """
 
 import contextlib
@@ -92,6 +95,18 @@ def test_load_plan_without_cuda_is_bf16_cpu():
         assert plan_q["dtype"] == "float16"
         assert plan_q["device_map"] == "auto"
         assert plan_q["cpu"] is False
+
+
+def test_fused_candidate_urls_flavor_first_then_4b_fallback():
+    with _stubbed_sdar() as sdar:
+        urls = sdar._fused_candidate_urls("SDAR-1.7B-Chat")
+        assert len(urls) == 2
+        assert "/training/model/SDAR-1.7B-Chat/" in urls[0]
+        assert "/training/model/SDAR-4B-Chat/" in urls[1]
+        # The fallback flavor itself gets no duplicate entry.
+        urls_4b = sdar._fused_candidate_urls("SDAR-4B-Chat")
+        assert len(urls_4b) == 1
+        assert "/training/model/SDAR-4B-Chat/" in urls_4b[0]
 
 
 def test_decompile_failure_raises_loudly():

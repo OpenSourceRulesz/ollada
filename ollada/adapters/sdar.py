@@ -85,6 +85,23 @@ _FUSED_GITHUB_RAW = (
     "https://raw.githubusercontent.com/JetAstra/SDAR/main/"
     "training/model/{flavor}/" + _FUSED_FILENAME
 )
+_FUSED_FALLBACK_FLAVOR = "SDAR-4B-Chat"
+
+
+def _fused_candidate_urls(flavor: str) -> list[str]:
+    """Raw-GitHub URLs to try for the authors' fused-loss module, in order.
+
+    Upstream's training/model/ tree only carries some flavors (4B and 8B
+    as of 2026-10), so the flavor-templated URL 404s for e.g.
+    SDAR-1.7B-Chat. The module is byte-identical across the flavor
+    folders that do exist (same git blob SHA, verified 2026-10-23), so
+    the 4B copy is a sound fallback for any flavor. Pure, so the
+    torch-free tests can pin the order.
+    """
+    urls = [_FUSED_GITHUB_RAW.format(flavor=flavor)]
+    if flavor != _FUSED_FALLBACK_FLAVOR:
+        urls.append(_FUSED_GITHUB_RAW.format(flavor=_FUSED_FALLBACK_FLAVOR))
+    return urls
 
 
 def _torch_rms_norm_fn(x, weight, bias=None, eps=1e-6, **_kwargs):
@@ -172,13 +189,33 @@ def _prepare_local_dir(source: str) -> tuple[str, list[str]]:
     for item in snapshot.iterdir():
         _link_or_copy(item, overlay / item.name)
     fused_path = overlay / _FUSED_FILENAME
+    if fused_path.exists() and fused_path.stat().st_size == 0:
+        fused_path.unlink()  # a failed earlier fetch can leave an empty file
+    restored_from = None
     if not fused_path.exists():
-        url = _FUSED_GITHUB_RAW.format(flavor=flavor)
-        urllib.request.urlretrieve(url, fused_path)
-    return str(overlay), [
+        errors = []
+        for url in _fused_candidate_urls(flavor):
+            try:
+                urllib.request.urlretrieve(url, fused_path)
+                restored_from = url
+                break
+            except Exception as exc:  # HTTPError, URLError, ...
+                errors.append(f"{url}: {exc}")
+        if restored_from is None:
+            raise AdapterError(
+                f"could not restore {_FUSED_FILENAME} for {flavor} from "
+                "the authors' GitHub repo; tried: " + "; ".join(errors)
+            )
+    note = (
         f"{_FUSED_FILENAME} missing from HF repo; authors' file restored "
         "from JetAstra/SDAR GitHub (training/model/)"
-    ]
+    )
+    if restored_from is not None and f"/{flavor}/" not in restored_from:
+        note += (
+            f" via the {_FUSED_FALLBACK_FLAVOR} copy "
+            "(byte-identical across flavors)"
+        )
+    return str(overlay), [note]
 
 
 def _top_k_logits(logits, k):
