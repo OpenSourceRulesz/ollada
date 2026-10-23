@@ -50,6 +50,11 @@ locally against transformers 4.53.3 before the fix — see git history):
    directly, which is the API that actually accepts the cache and
    `store_kv`.
 
+CPU loads: when no CUDA device is present, the adapter loads on CPU at
+bfloat16 (see _resolve_load_plan) — the recipe's float16 is a T4-safe GPU
+dtype, not a CPU-viable one. This is a probe path, not a verified
+configuration: no CPU run has passed the section-7 gate yet.
+
 Which repairs were applied is recorded on the adapter as `load_notes` and
 belongs in any verification record for this family.
 
@@ -71,7 +76,7 @@ from torch.nn import functional as F
 from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig
 from transformers.cache_utils import DynamicCache
 
-from ollada.adapters.base import BaseAdapter, quantization_config
+from ollada.adapters.base import AdapterError, BaseAdapter, quantization_config
 
 _DTYPES = {"float16": torch.float16, "bfloat16": torch.bfloat16}
 
@@ -238,7 +243,14 @@ def _to_block_mask(mask3d: torch.Tensor):
 
 def _decompile_flex_attention(model) -> bool:
     """Swap SDAR's torch.compile(max-autotune) flex wrapper for the same
-    call, eager. Returns True if the swap was applied."""
+    call, eager. Returns True when the swap was applied.
+
+    Raises AdapterError if the swap fails. The failure must be loud:
+    silently keeping the compiled wrapper (the pre-2026-10-23 behavior)
+    means Inductor spends minutes compiling per input shape — or fails
+    mid-generation — and on CPU that turns a detectable load problem
+    into an apparent hang.
+    """
     import importlib
 
     try:
@@ -249,9 +261,16 @@ def _decompile_flex_attention(model) -> bool:
             return flex_attention(query, key, value, block_mask=attention_mask, **kwargs)
 
         module.fused_flex_attention = eager_flex_attention
-        return True
-    except Exception:
-        return False
+    except Exception as exc:
+        raise AdapterError(
+            "SDAR flex-attention decompile failed: could not swap the "
+            "torch.compile(fullgraph=True, mode='max-autotune') wrapper "
+            "for the eager flex_attention call. Loading anyway would "
+            "leave the compiled wrapper in place — minutes of Inductor "
+            "compile per shape, or a mid-generation failure (on CPU: "
+            "an apparent hang)."
+        ) from exc
+    return True
 
 
 
@@ -368,6 +387,27 @@ def _block_diffusion_generate(
     return x
 
 
+def _resolve_load_plan(cuda_available: bool, recipe_dtype: str, quantized: bool) -> dict:
+    """Resolve the from_pretrained plan: which dtype, which placement.
+
+    Pure (no torch references) so the torch-free test suite can pin it.
+
+    With CUDA available — and for quantized (bitsandbytes) loads on any
+    machine — the plan is exactly the adapter's original behavior: the
+    recipe dtype is honored and layers are placed with
+    device_map="auto".
+
+    Without CUDA and without quantization the model loads on CPU, and
+    the dtype becomes bfloat16: PyTorch CPU fp16 matmul is slow and
+    unevenly supported (norm/softmax ops upcast or error by version),
+    while bf16 is the CPU-viable compute dtype. No device_map — the
+    model simply stays on CPU.
+    """
+    if cuda_available or quantized:
+        return {"dtype": recipe_dtype, "device_map": "auto", "cpu": False}
+    return {"dtype": "bfloat16", "device_map": None, "cpu": True}
+
+
 class SdarAdapter(BaseAdapter):
     family = "sdar"
 
@@ -381,20 +421,28 @@ class SdarAdapter(BaseAdapter):
         self.load_notes = notes
 
         self.tokenizer = AutoTokenizer.from_pretrained(local_dir, trust_remote_code=True)
+        qc = quantization_config(recipe.quant_default)
+        plan = _resolve_load_plan(torch.cuda.is_available(), recipe.dtype, qc is not None)
         kwargs = {
             "trust_remote_code": True,
             # transformers>=4.57 renamed torch_dtype -> dtype (deprecation
             # warning otherwise); SDAR's env guarantees >=4.57.
-            "dtype": _DTYPES.get(recipe.dtype, torch.float16),
+            "dtype": _DTYPES.get(plan["dtype"], torch.float16),
         }
-        qc = quantization_config(recipe.quant_default)
         if qc is not None:
             kwargs["quantization_config"] = qc
-        if qc is not None or torch.cuda.is_available():
+        if plan["device_map"] is not None:
             # Place layers directly on the GPU during load; a CPU load
             # followed by .cuda() doubles peak host+device traffic and
-            # muddies OOM diagnosis.
-            kwargs["device_map"] = "auto"
+            # muddies OOM diagnosis. (The CPU plan has no device_map at
+            # all — the model stays on CPU.)
+            kwargs["device_map"] = plan["device_map"]
+        if plan["cpu"]:
+            notes.append(
+                "cpu load: no CUDA — dtype forced to bfloat16 (recipe "
+                f"dtype {recipe.dtype} is not CPU-viable); no device_map, "
+                "model stays on CPU"
+            )
         self.model = AutoModelForCausalLM.from_pretrained(local_dir, **kwargs)
         self.model.eval()
         notes.append(f"loaded dtype: {self.model.dtype}")
