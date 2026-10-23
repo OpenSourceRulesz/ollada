@@ -61,6 +61,45 @@ def _stubbed_sdar():
     cache_utils_stub = types.ModuleType("transformers.cache_utils")
     cache_utils_stub.DynamicCache = object
 
+    # transformers.utils.logging with the real module's presentation
+    # API shape (get/set verbosity, progress-bar switch), stateful so
+    # tests can watch _quiet_load toggle and restore it.
+    utils_stub = types.ModuleType("transformers.utils")
+    hf_logging_stub = types.ModuleType("transformers.utils.logging")
+    hf_state = {"verbosity": 30, "bars": True, "calls": []}
+
+    def _get_verbosity():
+        return hf_state["verbosity"]
+
+    def _set_verbosity(value):
+        hf_state["verbosity"] = value
+        hf_state["calls"].append(("set_verbosity", value))
+
+    def _set_verbosity_error():
+        hf_state["verbosity"] = 40
+        hf_state["calls"].append(("set_verbosity_error",))
+
+    def _is_progress_bar_enabled():
+        return hf_state["bars"]
+
+    def _disable_progress_bar():
+        hf_state["bars"] = False
+        hf_state["calls"].append(("disable_progress_bar",))
+
+    def _enable_progress_bar():
+        hf_state["bars"] = True
+        hf_state["calls"].append(("enable_progress_bar",))
+
+    hf_logging_stub.get_verbosity = _get_verbosity
+    hf_logging_stub.set_verbosity = _set_verbosity
+    hf_logging_stub.set_verbosity_error = _set_verbosity_error
+    hf_logging_stub.is_progress_bar_enabled = _is_progress_bar_enabled
+    hf_logging_stub.disable_progress_bar = _disable_progress_bar
+    hf_logging_stub.enable_progress_bar = _enable_progress_bar
+    hf_logging_stub._state = hf_state
+    utils_stub.logging = hf_logging_stub
+    transformers_stub.utils = utils_stub
+
     stubs = {
         "torch": torch_stub,
         "torch.nn": nn_stub,
@@ -69,6 +108,8 @@ def _stubbed_sdar():
         "torch.nn.attention.flex_attention": flex_stub,
         "transformers": transformers_stub,
         "transformers.cache_utils": cache_utils_stub,
+        "transformers.utils": utils_stub,
+        "transformers.utils.logging": hf_logging_stub,
     }
     saved = {k: sys.modules.get(k) for k in stubs}
     sys.modules.update(stubs)
@@ -319,21 +360,32 @@ def test_no_progress_bars_tolerates_missing_hub():
             pass
 
 
-def test_quiet_load_suppresses_upstream_docstring_warning_only():
-    import warnings
-
+def test_quiet_load_swallows_stdout_prints(capsys):
+    """The store_kv scolding is a bare print() in transformers'
+    auto_docstring (wheel source), reachable by neither logging nor
+    warnings filters — the load window must swallow stdout itself,
+    and stdout must work again afterwards."""
     with _stubbed_sdar() as sdar:
-        with warnings.catch_warnings(record=True) as seen:
-            warnings.simplefilter("always")
-            with sdar._quiet_load():
-                warnings.warn(
-                    "`store_kv` is part of SDARModel.forward's signature, "
-                    "but not documented. Make sure to add it to the docstring.",
-                    UserWarning,
-                )
-                warnings.warn("a warning that matters", UserWarning)
-        messages = [str(w.message) for w in seen]
-        assert messages == ["a warning that matters"]
+        with sdar._quiet_load():
+            print("🚨 `store_kv` is part of SDARModel.forward's signature")
+        print("after the window")
+    out = capsys.readouterr().out
+    assert "store_kv" not in out
+    assert "after the window" in out
+
+
+def test_quiet_load_toggles_and_restores_transformers_presentation():
+    with _stubbed_sdar() as sdar:
+        state = sys.modules["transformers.utils.logging"]._state
+        with sdar._quiet_load():
+            assert state["bars"] is False
+            assert state["verbosity"] == 40
+        assert state["bars"] is True
+        assert state["verbosity"] == 30
+        names = [c[0] for c in state["calls"]]
+        assert names.index("disable_progress_bar") < names.index(
+            "enable_progress_bar"
+        )
 
 
 def test_silence_eager_flex_warnings():

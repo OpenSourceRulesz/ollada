@@ -106,6 +106,7 @@ UNVERIFIED in ollada until a real-load gate passes on a T4.
 from __future__ import annotations
 
 import contextlib
+import io
 import os
 import sys
 import time
@@ -577,38 +578,59 @@ def _no_progress_bars():
 def _quiet_load():
     """Silence upstream's load-time console noise for the load window.
 
-    Two sources, both warn-only and both unactionable for the user:
-    transformers logs a docstring complaint about upstream's own
-    modeling file (`store_kv` is in SDARModel.forward's signature but
-    undocumented — an upstream cosmetic defect), and assorted
-    deprecation chatter. Everything that matters about a load is in
-    the adapter's load_notes; the prints add nothing. Transformers'
-    verbosity is restored on exit; the one warnings filter is scoped
-    to the window by catch_warnings.
+    Three channels, three mechanisms — each verified against the
+    transformers 4.57.6 wheel source, after the first version of this
+    helper guessed wrong on two of them:
+
+    - The checkpoint-shards bar is transformers' own logging.tqdm,
+      gated by transformers.utils.logging's progress-bar switch (not
+      by any from_pretrained kwarg — 4.57.6 has no disable_tqdm
+      parameter, and passing one crashes strict custom model
+      classes). The switch is flipped off for the window and back on
+      after, but only if it was on: a user who disabled bars
+      globally keeps them disabled.
+    - Transformers' logger chatter: verbosity to error for the
+      window, restored after.
+    - The docstring scolding — auto_docstring's line about upstream's
+      own undocumented `store_kv` parameter — is a bare print() to
+      stdout (auto_docstring.py, `print("\\n".join(...))`), reachable
+      by neither logging nor warnings filters. Stdout is therefore
+      redirected to a sink for the window. from_pretrained writes
+      nothing legitimate to stdout (its bars and logs go to stderr
+      and the logger), and ollada prints results outside the window.
+
+    Everything that matters about a load is in the adapter's
+    load_notes; the console noise adds nothing.
     """
     hf_logging = None
     prev_verbosity = None
+    bars_were_on = False
     try:
         from transformers.utils import logging as _hf_logging
 
         prev_verbosity = _hf_logging.get_verbosity()
         _hf_logging.set_verbosity_error()
+        bars_were_on = bool(_hf_logging.is_progress_bar_enabled())
+        if bars_were_on:
+            _hf_logging.disable_progress_bar()
         hf_logging = _hf_logging
     except Exception:
         hf_logging = None
     try:
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message=r".*is part of .*forward's signature, but not documented.*",
-            )
+        with contextlib.redirect_stdout(io.StringIO()):
             yield
     finally:
-        if hf_logging is not None and prev_verbosity is not None:
-            try:
-                hf_logging.set_verbosity(prev_verbosity)
-            except Exception:
-                pass
+        if hf_logging is not None:
+            if bars_were_on:
+                try:
+                    hf_logging.enable_progress_bar()
+                except Exception:
+                    pass
+            if prev_verbosity is not None:
+                try:
+                    hf_logging.set_verbosity(prev_verbosity)
+                except Exception:
+                    pass
 
 
 def _silence_eager_flex_warnings() -> None:
@@ -859,9 +881,6 @@ class SdarAdapter(BaseAdapter):
             )
             kwargs = {
                 "trust_remote_code": True,
-                # No library progress bars in ollada's UI; the CLI
-                # shows its own working indicator during the load.
-                "disable_tqdm": True,
                 # transformers>=4.57 renamed torch_dtype -> dtype
                 # (deprecation warning otherwise); SDAR's env
                 # guarantees >=4.57.
