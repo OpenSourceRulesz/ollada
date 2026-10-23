@@ -151,6 +151,31 @@ def _register_flash_attn_fallback() -> str:
     return "torch-fallback"
 
 
+def _register_kwargs_alias(utils_module=None) -> str | None:
+    """Alias transformers.utils.LossKwargs to TransformersKwargs if absent.
+
+    transformers 4.57 renamed the loss-kwargs TypedDict LossKwargs ->
+    TransformersKwargs (its superset successor), and 5.x kept the new
+    name only. SDAR's repos ship two modeling revisions: the 4B imports
+    the new name, the 1.7B still imports LossKwargs — and uses it as a
+    TypedDict base class — so on transformers>=4.57 the 1.7B module dies
+    at import with "cannot import name 'LossKwargs'". Registering the
+    successor under the old name restores exactly the composition the
+    older file was written against. Returns a note when the alias was
+    applied, None when the name already exists.
+    """
+    if utils_module is None:
+        import transformers.utils as utils_module
+
+    if hasattr(utils_module, "LossKwargs"):
+        return None
+    utils_module.LossKwargs = utils_module.TransformersKwargs
+    return (
+        "transformers.utils.LossKwargs aliased to TransformersKwargs "
+        "(pre-rename SDAR modeling revision)"
+    )
+
+
 def _link_or_copy(src: Path, dst: Path) -> None:
     if dst.exists() or dst.is_symlink():
         return
@@ -453,6 +478,9 @@ class SdarAdapter(BaseAdapter):
         notes: list[str] = []
         flash = _register_flash_attn_fallback()
         notes.append(f"flash_attn: {flash}")
+        alias_note = _register_kwargs_alias()
+        if alias_note is not None:
+            notes.append(alias_note)
         local_dir, overlay_notes = _prepare_local_dir(recipe.source)
         notes.extend(overlay_notes)
         self.load_notes = notes

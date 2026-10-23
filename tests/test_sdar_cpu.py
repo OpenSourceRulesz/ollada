@@ -97,6 +97,21 @@ def test_load_plan_without_cuda_is_bf16_cpu():
         assert plan_q["cpu"] is False
 
 
+def test_kwargs_alias_applied_when_losskwargs_missing():
+    with _stubbed_sdar() as sdar:
+        fake_utils = types.SimpleNamespace(TransformersKwargs="TK")
+        note = sdar._register_kwargs_alias(fake_utils)
+        assert fake_utils.LossKwargs == "TK"
+        assert note is not None and "LossKwargs" in note
+
+
+def test_kwargs_alias_noop_when_losskwargs_present():
+    with _stubbed_sdar() as sdar:
+        fake_utils = types.SimpleNamespace(LossKwargs="LK", TransformersKwargs="TK")
+        assert sdar._register_kwargs_alias(fake_utils) is None
+        assert fake_utils.LossKwargs == "LK"
+
+
 def test_fused_candidate_urls_flavor_first_then_4b_fallback():
     with _stubbed_sdar() as sdar:
         urls = sdar._fused_candidate_urls("SDAR-1.7B-Chat")
