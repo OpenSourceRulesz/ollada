@@ -1,0 +1,31 @@
+# ollada Recipe (schema v1) — sdar:1.7b
+# The laptop pick: verified on CPU (see the verified block). Its GPU
+# verification has not been run; the verified label is the CPU run,
+# hardware-labelled like every other verification in the catalog.
+name: sdar:1.7b
+family: sdar
+source: JetLM/SDAR-1.7B-Chat
+license: Apache-2.0
+task: chat
+description: SDAR 1.7B — Qwen3-1.7B converted to block diffusion; the small SDAR, and ollada's CPU pick for machines without a GPU.
+size_gb_bf16: 4.1
+quant_default: bf16
+dtype: float16             # GPU loads honor this; the adapter's CPU plan forces bf16 (fp16 is not CPU-viable)
+env:
+  transformers: ">=4.57" # its modeling is the pre-rename revision (imports LossKwargs; the adapter aliases it to TransformersKwargs at load). No einops: this revision's modeling never imports it (the 4B's does).
+  extras: [torch, accelerate]
+generate:
+  gen_length: 128          # the CPU-verified canvas for this size; longer answers want a per-run length override
+  block_length: 4          # reference config: block 4, 4 denoising steps
+  denoising_steps: 4
+  remasking: low_confidence_dynamic
+  confidence_threshold: 0.9
+  temperature: 1.0
+  top_p: 1.0
+  top_k: 0
+verified:
+  hardware: "Dell Pro 5 14 (Intel Core Ultra 7 365) — CPU only, bf16"
+  tokens_per_sec: 6.1      # full-length canvas rate from the verification run (130 tokens in 21.2s); short answers finish far faster via early stop (one-word probe 1.9s)
+  min_host_ram_gb: 8       # observed peak RSS was 3.9 GB on the verification machine; 8 is the prudent floor the fit check enforces
+  date: "2026-10-23"
+  notes: "Verified on CPU through ollada's own adapter (feat/sdar-cpu load path: bf16, no device_map, tensor mask contract — this repo's modeling is the pre-rename revision, so the adapter's LossKwargs alias and flash_attn SDPA stand-in both engage; see adapters/sdar.py). Fixed prompt set at recipe defaults, all correct: train-speed reasoning (90 km/h, 21.2s), one-word capital probe (exactly 'Paris', 1.9s), Fibonacci code (clean and runnable, 6.3s) — gen_length 128. The 2-step reduced config FAILS at this size (capital never commits, fib garbles): 4 steps is the floor, matching SDAR's paper protocol. No vram_gb: this verification used no GPU. GPU verification not yet run."

@@ -2,10 +2,12 @@ import pytest
 
 from ollada.recipes import RecipeError, get_recipe, load_catalog, validate_recipe
 
-EXPECTED_SHELF = {"dream:7b", "sdar:4b", "diffcoder:8b"}
+EXPECTED_SHELF = {"dream:7b", "sdar:4b", "diffcoder:8b", "sdar:1.7b"}
 
 
-def test_shelf_has_exactly_the_three_mvp_models():
+def test_shelf_has_exactly_the_expected_models():
+    # The MVP three (T4-verified) plus sdar:1.7b, added 2026-10-23 as
+    # the CPU tier's first entry (Dell-verified, see its recipe).
     names = {r.name for r in load_catalog()}
     assert names == EXPECTED_SHELF
 
@@ -33,6 +35,13 @@ def test_verification_state_matches_the_record():
     diffcoder = by_name["diffcoder:8b"]
     assert diffcoder.is_verified is True
     assert diffcoder.verified["vram_gb"] == 15.15
+    # sdar:1.7b earned the shelf's first CPU verification on the Dell,
+    # 2026-10-23: hardware-labelled as a CPU run, and it must NOT carry
+    # a VRAM figure — none was measured.
+    sdar17 = by_name["sdar:1.7b"]
+    assert sdar17.is_verified is True
+    assert "CPU" in sdar17.verified["hardware"]
+    assert "vram_gb" not in sdar17.verified
 
 
 def test_family_env_pins_match_their_custom_code():
