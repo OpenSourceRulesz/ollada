@@ -4,7 +4,9 @@
 through Ollada's own code on a Colab **Tesla T4** (2026-10-21), plus a
 literature pass the same week. Desktop re-verification on an
 **RTX 5060 Ti 16GB** — the machine this shelf is actually aimed at — is
-still pending and is a pre-launch gate. Treat the T4 numbers as a
+still pending and is a pre-launch gate. A CPU addendum (§7,
+2026-10-23) follows the T4 work — SDAR measured running on a laptop
+CPU — and changes nothing about that gate. Treat the T4 numbers as a
 conservative floor, not the final word: speeds will change on newer
 hardware, and one fit question (DiffCoder, §6) only the desktop can
 answer. Where a number is a vendor's, it is labelled a vendor's. Vendor
@@ -47,7 +49,7 @@ versus the highest").
 ## 3. Upstream defect catalog
 
 Getting three "just load it from Hugging Face" models to actually load
-took eight repairs. Each was reproduced against the real code and
+took eight repairs. The CPU/Windows path added four more SDAR repairs (§7). Each was reproduced against the real code and
 weights before it was fixed.
 
 **SDAR (`JetLM/SDAR-4B-Chat`) — five defects**, all confirmed still
@@ -139,3 +141,59 @@ regression test. The gate is not theatre; it has caught us too.
 - DiffCoder `gen_length` sweep (the canvas-exhaustion finding, §2).
 - `nemotron:3b` — first planned shelf addition, landing with the
   isolated-worker build its transformers ≥5 requirement forces.
+
+
+## 7. Addendum (2026-10-23): SDAR on CPU — no GPU at all
+
+Two days after the T4 work, we asked whether any of the shelf could
+run on a machine with no GPU at all: a Dell Pro 5 14 (Intel Core
+Ultra 7 365, 8 cores, 32GB RAM, Windows 11) — an ordinary managed
+work laptop. For SDAR the answer is yes, measured end-to-end through
+Ollada's own adapter, bf16, no quantization:
+
+| Model | Train problem (reasoning) | One-word probe | Fibonacci code | Peak host RAM |
+|---|---|---|---|---|
+| `sdar:1.7b` | 21.2s | 1.9s | 6.3s | 3.9 GB |
+| `sdar:4b` | 63.5s | 2.4s | 16.2s | 8.6 GB |
+
+Fixed prompt set, `gen_length` 128, recipe defaults (block 4, 4
+denoising steps); all six answers correct. Interactive terminal
+sessions followed naturally: short questions answer in seconds,
+long-form answers take minutes — and truncated at the 256-token
+default canvas, which is why `ollada run` gained a canvas-size
+control (`--length`, `/length` in the REPL) and a live canvas view
+for SDAR (terminal runs now show the denoising itself: committed
+words, current guesses, untouched masks).
+
+- **The step floor is real at both sizes.** Halving denoising steps
+  to 2 did not meaningfully save time (the per-block machinery
+  dominates) and broke output — the 1.7B's one-word probe never
+  commits, and Fibonacci garbles at both sizes. Four steps, SDAR's
+  paper protocol, is the working point. Canvas length, not steps,
+  is the speed lever.
+- **Block diffusion is why this works at all.** SDAR forwards only
+  the active block and caches the committed prefix exactly, so a CPU
+  answer costs roughly steps-per-block × an autoregressive pass —
+  not hundreds of full-canvas passes. In our literature pass
+  (2026-10-23) we found no published CPU measurements for any
+  block-diffusion model; the only CPU numbers we could find anywhere
+  were for LLaDA-8B.
+- **Windows took four more SDAR repairs.** The 1.7B's repo ships an
+  older modeling revision that imports a transformers symbol removed
+  in 4.57 (the adapter aliases it) and lacks the fused-loss file the
+  4B's repo also lacks — restored from the authors' GitHub, under a
+  different folder than the 4B's. That file imports Triton, which
+  has no Windows build (the adapter stubs it; the loss is
+  training-only, and its kernels raise if ever called). And the 4B
+  modeling's `@torch.compile` decorator must be neutralized during
+  load on Triton-less machines, or backend resolution walks into the
+  stub. Also: the 4B modeling imports `einops` — invisible on Colab,
+  which provides it ambiently; a clean environment has to declare it
+  (the recipe now does).
+- **Scope, honestly:** one model family, one machine. Dream is
+  full-canvas diffusion — every step reprocesses the whole sequence —
+  and we expect it to be impractical on CPU; it and DiffCoder are
+  untested there and remain GPU models on the shelf. `sdar:1.7b`
+  joins the catalog on the strength of this run, its recipe
+  labelled CPU-verified; the 5060 Ti re-verification in the status
+  header is unchanged and still pending.

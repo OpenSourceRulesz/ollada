@@ -141,7 +141,7 @@ def card(m: dict) -> str:
     <span class="badge">{esc(m.get('task', ''))}</span>
     <span class="badge">{esc(m.get('license', ''))}</span>
     <span class="badge">{esc(m.get('size_gb_bf16'))} GB</span>
-    <span class="badge ver">verified · {esc(v.get('vram_gb'))} GB VRAM · {esc(v.get('tokens_per_sec'))} tok/s</span>
+    <span class="badge ver">verified · {esc(f"{v['vram_gb']} GB VRAM" if v.get('vram_gb') else "CPU (no GPU)")} · {esc(v.get('tokens_per_sec'))} tok/s</span>
   </div>
 </a>"""
 
@@ -152,7 +152,7 @@ def index_body(models: list[dict]) -> str:
 <div class="hero">
   <h1>Diffusion models, verified and ready to run</h1>
   <p><strong>Ollada</strong> is the shelf for open <strong>diffusion</strong> models —
-     curated names, verified recipes, one command, running locally on your GPU.
+     curated names, verified recipes, one command, running locally on your GPU — or, for the SDAR models, your CPU.
      The same idea <strong>Ollama</strong> proved for autoregressive models,
      rebuilt for diffusion.</p>
   <div class="term">
@@ -183,10 +183,11 @@ def model_body(m: dict) -> str:
     v = m.get("verified", {})
     stats = [
         ("Verified on", v.get("hardware", "")),
-        ("Peak VRAM", f"{v.get('vram_gb')} GB"),
+        ("Peak VRAM", f"{v['vram_gb']} GB" if v.get("vram_gb") else "— (CPU run)"),
         ("Speed", f"{v.get('tokens_per_sec')} canvas tok/s"),
-        ("Load time", f"{v.get('load_seconds')} s"),
     ]
+    if v.get("load_seconds"):
+        stats.append(("Load time", f"{v['load_seconds']} s"))
     stat_html = "\n".join(
         f'<div class="stat"><div class="k">{esc(k)}</div><div class="v">{esc(val)}</div></div>'
         for k, val in stats)
@@ -206,8 +207,7 @@ def model_body(m: dict) -> str:
 </div>
 <p class="sub">Verified {esc(v.get('date', ''))} through Ollada's own code. Load time
 includes the first weight download where noted in the verification notes —
-cached loads are faster. Desktop verification (RTX 5060 Ti) is the pre-launch
-re-check; T4 numbers are the conservative floor.</p>
+cached loads are faster. {esc("This model's verification is a CPU run (see the notes); a GPU verification has not been run for it." if "CPU" in v.get("hardware", "") else "Desktop verification (RTX 5060 Ti) is the pre-launch re-check; T4 numbers are the conservative floor.")}</p>
 <h2 class="section">Recipe defaults</h2>
 <table>{rows}
 </table>
@@ -227,7 +227,7 @@ def library_body(models: list[dict]) -> str:
   <td><a href="models/{slug(m['name'])}.html"><code>{esc(m['name'])}</code></a></td>
   <td>{esc(m.get('task', ''))}</td>
   <td>{esc(m.get('size_gb_bf16'))} GB</td>
-  <td>{esc(v.get('vram_gb'))} GB</td>
+  <td>{esc(f"{v['vram_gb']} GB" if v.get('vram_gb') else "— (CPU)")}</td>
   <td>{esc(v.get('tokens_per_sec'))}</td>
   <td>{esc(m.get('quant_default', ''))}</td>
   <td>{esc(v.get('date', ''))}</td>
@@ -250,10 +250,10 @@ def library_body(models: list[dict]) -> str:
 {"".join(rows)}
 </table>
 <p class="sub">VRAM and speed were measured through Ollada's own code on the hardware
-named on each model's page (Colab Tesla T4, 2026-10-21 — single-run samples,
-treated as measured floors, not laws). Desktop verification on the RTX 5060 Ti
-is the pre-launch re-check; T4 numbers are the conservative floor. Weights
-come from Hugging Face — Ollada hosts no registry.</p>
+named on each model's page (GPU shelf: Colab Tesla T4, 2026-10-21; sdar:1.7b: a
+laptop CPU, 2026-10-23 — single-run samples, treated as measured floors, not
+laws). Desktop verification on the RTX 5060 Ti is the pre-launch re-check.
+Weights come from Hugging Face — Ollada hosts no registry.</p>
 <h2 class="section">Pull them</h2>
 <div class="term" style="margin:20px 0;">
 {pulls}
@@ -270,8 +270,10 @@ measured on the hardware named — no vendor benchmarks.
 |---|---|---|---|---|---|---|---|
 {rows}
 
-T4 numbers are the conservative floor; desktop verification (RTX 5060 Ti) is
-the pre-launch re-check. Weights come from Hugging Face — Ollada hosts no
+GPU numbers are from a Colab Tesla T4 (2026-10-21) and are the conservative
+floor; desktop verification (RTX 5060 Ti) is the pre-launch re-check.
+`sdar:1.7b` was verified on a laptop CPU (2026-10-23) — no GPU was used, so
+it has no VRAM figure. Weights come from Hugging Face — Ollada hosts no
 registry.
 
 Full recipes and verification notes live on each model's site page
@@ -283,9 +285,10 @@ def library_md(models: list[dict]) -> str:
     rows = []
     for m in models:
         v = m.get("verified", {})
+        peak = f"{v['vram_gb']} GB" if v.get("vram_gb") else "— (CPU)"
         rows.append(
             f"| `{m['name']}` | {m.get('task', '')} | {m.get('size_gb_bf16')} GB "
-            f"| {v.get('vram_gb')} GB | {v.get('tokens_per_sec')} "
+            f"| {peak} | {v.get('tokens_per_sec')} "
             f"| {m.get('quant_default', '')} | {v.get('date', '')} | {m.get('license', '')} |")
     return LIBRARY_MD.format(rows="\n".join(rows))
 
