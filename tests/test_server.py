@@ -52,7 +52,7 @@ def client(monkeypatch):
 def test_health_and_tags(client):
     assert client.get("/health").json()["status"] == "ok"
     names = {m["name"] for m in client.get("/api/tags").json()["models"]}
-    assert names == {"dream:7b", "sdar:4b", "diffcoder:8b"}
+    assert names == {"dream:7b", "sdar:4b", "diffcoder:8b", "sdar:1.7b"}
 
 
 def test_ollama_shaped_chat(client):

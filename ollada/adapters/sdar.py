@@ -708,6 +708,32 @@ def _forward_logits(model, input_ids, mask, position_ids, cache, store_kv, mask_
 
 
 @torch.no_grad()
+def _watch_pieces(tokenizer, gen_ids, mask_id, tentative):
+    """Build one watch-mode frame for the generated region.
+
+    Returns a list of (text, state) per generated position: "done"
+    for a committed token, "tent" for the model's current prediction
+    at a still-masked position (only the active block has one),
+    "mask" for a position with no prediction yet. Piece text comes
+    from the tokenizer with the BPE spacing markers turned back into
+    characters. A partial multi-byte character can shimmer as an odd
+    glyph in a tentative piece; it is replaced on commit, and the
+    final answer text never comes from these pieces.
+    """
+    pieces = []
+    for i, tid in enumerate(gen_ids):
+        if tid != mask_id:
+            state, raw = "done", tid
+        elif tentative and i in tentative:
+            state, raw = "tent", tentative[i]
+        else:
+            pieces.append(("", "mask"))
+            continue
+        text = tokenizer.convert_ids_to_tokens([raw])[0]
+        pieces.append((text.replace("Ġ", " ").replace("Ċ", "\n"), state))
+    return pieces
+
+
 def _block_diffusion_generate(
     model,
     input_ids,
@@ -722,8 +748,17 @@ def _block_diffusion_generate(
     confidence_threshold=0.9,
     stopping_ids=None,
     mask_contract="blockmask",
+    on_step=None,
+    watch_tokenizer=None,
 ):
-    """Adapted from JetAstra/SDAR generate.py (Apache-2.0)."""
+    """Adapted from JetAstra/SDAR generate.py (Apache-2.0).
+
+    on_step, when given, is called with a watch-mode frame (see
+    _watch_pieces) once before generation and after every denoising
+    step's transfer: on_step(pieces, block_index, num_blocks,
+    step_index, denoising_steps). Callback exceptions are swallowed —
+    a broken renderer must never break a generation.
+    """
     model.eval()
     device = model.device
     prompt_length = input_ids.shape[1]
@@ -755,6 +790,24 @@ def _block_diffusion_generate(
             store_kv=True,
             mask_contract=mask_contract,
         )
+
+    def _emit(snap_row, tentative, block_idx, step_idx):
+        if on_step is None or watch_tokenizer is None:
+            return
+        try:
+            on_step(
+                _watch_pieces(
+                    watch_tokenizer, snap_row[prompt_length:], mask_id, tentative
+                ),
+                block_idx,
+                num_blocks,
+                step_idx,
+                denoising_steps,
+            )
+        except Exception:
+            pass
+
+    _emit(x[0].tolist(), {}, prefill_blocks, 0)
 
     transfer_counts = _num_transfer_tokens(block_length, denoising_steps)
 
@@ -812,6 +865,15 @@ def _block_diffusion_generate(
                 raise ValueError(f"unknown remasking strategy: {remasking_strategy}")
 
             cur_x[transfer_index] = x0[transfer_index]
+            if on_step is not None:
+                snap = x.clone()
+                snap[:, lo:hi] = cur_x
+                tentative = {}
+                for j in range(block_length):
+                    rel = lo + j - prompt_length
+                    if rel >= 0 and int(cur_x[0, j]) == mask_id:
+                        tentative[rel] = int(x0[0, j])
+                _emit(snap[0].tolist(), tentative, num_block, step)
 
         x[:, lo:hi] = cur_x
         if stopping_ids and any(s in x[:, prompt_length:] for s in stopping_ids):
@@ -843,6 +905,7 @@ def _resolve_load_plan(cuda_available: bool, recipe_dtype: str, quantized: bool)
 
 class SdarAdapter(BaseAdapter):
     family = "sdar"
+    supports_watch = True
 
     def load(self) -> None:
         recipe = self.recipe
@@ -913,7 +976,7 @@ class SdarAdapter(BaseAdapter):
         self._stopping_ids = [eos] if isinstance(eos, int) else list(eos or [])
         self._mask_id = self.tokenizer(self.tokenizer.mask_token)["input_ids"][0]
 
-    def chat(self, messages, overrides=None):
+    def chat(self, messages, overrides=None, on_step=None):
         self._require_loaded()
         params = self._params(overrides)
         input_ids = self._prompt_ids(messages).to(self.model.device)
@@ -932,6 +995,8 @@ class SdarAdapter(BaseAdapter):
             confidence_threshold=float(params.get("confidence_threshold", 0.9)),
             stopping_ids=self._stopping_ids,
             mask_contract=self._mask_contract,
+            on_step=on_step,
+            watch_tokenizer=self.tokenizer,
         )
         result = self._finish(out, input_ids.shape[1], started)
         # The canvas can leave mask tokens in unfinished tail blocks.

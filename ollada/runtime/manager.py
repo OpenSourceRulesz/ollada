@@ -59,10 +59,17 @@ class ModelManager:
         messages: list[dict],
         overrides: dict | None = None,
         force: bool = False,
+        on_step=None,
     ) -> GenResult:
         with self._lock:  # one GPU, one generation at a time
             adapter = self.ensure_loaded(name, force=force)
-            result = adapter.chat(messages, overrides)
+            # Watch mode: the step callback is forwarded only to
+            # adapters that support it — the others keep the exact
+            # pre-watch call shape.
+            if on_step is not None and getattr(adapter, "supports_watch", False):
+                result = adapter.chat(messages, overrides, on_step=on_step)
+            else:
+                result = adapter.chat(messages, overrides)
             measurements.capture_and_record(adapter.recipe.name)
             return result
 

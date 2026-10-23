@@ -8,6 +8,8 @@ Commands that need a missing extra say so instead of crashing.
 from __future__ import annotations
 
 import argparse
+import os
+import shutil
 import sys
 import threading
 import time
@@ -16,6 +18,27 @@ from ollada import __version__, fit, measurements
 from ollada.recipes import RecipeError, get_recipe, load_catalog
 
 GPU_HINT = 'this command needs the GPU stack: pip install "ollada[gpu]"'
+
+
+def _parse_length_command(text: str) -> int | None:
+    """Parse the REPL's /length command.
+
+    Returns the new canvas length for '/length <n>', None when the
+    text is not the command, and raises ValueError for a malformed
+    one — the canvas is fixed before generation starts, so a bad
+    value must fail here, not inside the model.
+    """
+    stripped = text.strip()
+    if stripped != "/length" and not stripped.startswith("/length "):
+        return None
+    rest = stripped[len("/length") :].strip()
+    try:
+        value = int(rest)
+    except ValueError:
+        raise ValueError("usage: /length <positive number of tokens>") from None
+    if value < 1:
+        raise ValueError("length must be a positive number of tokens")
+    return value
 
 
 class _Thinking:
@@ -62,16 +85,140 @@ class _Thinking:
             except Exception:
                 return
 
-    def __exit__(self, *exc):
+    def extinguish(self) -> None:
+        """Stop the indicator immediately (watch mode is taking over
+        the terminal). Idempotent; __exit__ stays safe afterwards."""
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=1.0)
+            self._thread = None
             try:
                 self._stream.write("\r" + " " * 24 + "\r")
                 self._stream.flush()
             except Exception:
                 pass
+
+    def __exit__(self, *exc):
+        self.extinguish()
         return False
+
+
+class _CanvasWatch:
+    """Watch a diffusion canvas converge, live in the terminal.
+
+    The renderer for watch-capable adapters' per-step frames (see
+    adapters/sdar.py): committed tokens print plain, the model's
+    current guess at a still-masked position prints dim, and an
+    untouched position prints as ░. Frames redraw in place on stderr
+    (the answer itself is printed clean on stdout afterwards, exactly
+    as without watch mode), throttled so a fast GPU cadence drops
+    frames instead of ever slowing the model. finish() erases the
+    canvas so the final text lands on a clean terminal.
+    """
+
+    _MIN_FRAME_SECONDS = 0.12
+    _DIM = "\033[2m"
+    _MASK = "\033[90m"
+    _RESET = "\033[0m"
+
+    def __init__(self, stream=None):
+        self._stream = stream if stream is not None else sys.stderr
+        self._lines = 0
+        self._last_draw = 0.0
+        self._started = False
+        # Set by the caller: invoked once, just before the first
+        # frame draws (used to extinguish the working spinner).
+        self.on_first_frame = None
+
+    def __call__(self, pieces, block_i, num_blocks, step_i, steps):
+        now = time.monotonic()
+        if self._started and now - self._last_draw < self._MIN_FRAME_SECONDS:
+            return
+        if not self._started:
+            self._started = True
+            if self.on_first_frame is not None:
+                self.on_first_frame()
+        self._last_draw = now
+        width = max(40, shutil.get_terminal_size().columns - 1)
+        lines = self._compose(pieces, width)
+        lines.append(
+            f"block {block_i + 1}/{num_blocks} · step {min(step_i + 1, steps)}/{steps}"
+        )
+        self._draw(lines)
+
+    def _compose(self, pieces, width):
+        # Flatten to styled chunks, then wrap by display width,
+        # breaking between chunks where possible. A chunk carries
+        # (style_prefix, text); unstyled chunks use "".
+        chunks = []
+        for text, state in pieces:
+            if state == "done":
+                chunks.append(("", text))
+            elif state == "tent":
+                chunks.append((self._DIM, text))
+            else:
+                chunks.append((self._MASK, "░"))
+        lines: list[list[tuple[str, str]]] = [[]]
+        col = 0
+        for style, text in chunks:
+            for k, seg in enumerate(text.split("\n")):
+                if k > 0:
+                    lines.append([])
+                    col = 0
+                if not seg:
+                    continue
+                if col > 0 and col + len(seg) > width:
+                    lines.append([])
+                    col = 0
+                if len(seg) > width and col == 0:
+                    seg = seg[:width]
+                lines[-1].append((style, seg))
+                col += len(seg)
+        rendered = []
+        for line in lines:
+            parts = []
+            for style, seg in line:
+                parts.append(f"{style}{seg}{self._RESET}" if style else seg)
+            rendered.append("".join(parts))
+        return rendered
+
+    def _draw(self, lines):
+        out = []
+        if self._lines:
+            out.append(f"\033[{self._lines}A")
+        for i, line in enumerate(lines):
+            out.append("\r\033[2K" + line)
+            if i < len(lines) - 1:
+                out.append("\n")
+        try:
+            self._stream.write("".join(out))
+            self._stream.flush()
+        except Exception:
+            pass
+        self._lines = len(lines)
+
+    def finish(self):
+        """Erase the canvas; the caller prints the final answer next.
+        Resets for the next chat turn (the REPL reuses one watch)."""
+        if self._lines:
+            out = []
+            if self._lines > 1:
+                out.append(f"\033[{self._lines - 1}A")
+            for i in range(self._lines):
+                out.append("\r\033[2K")
+                if i < self._lines - 1:
+                    out.append("\n")
+            if self._lines > 1:
+                out.append(f"\033[{self._lines - 1}A")
+            out.append("\r")
+            try:
+                self._stream.write("".join(out))
+                self._stream.flush()
+            except Exception:
+                pass
+        self._lines = 0
+        self._started = False
+        self._last_draw = 0.0
 
 
 def _cmd_list(_args) -> int:
@@ -143,28 +290,75 @@ def _cmd_run(args) -> int:
         return 2
     from ollada.runtime.manager import ModelManager
 
+    if args.length is not None and args.length < 1:
+        print("length must be a positive number of tokens", file=sys.stderr)
+        return 2
     manager = ModelManager()
+    # The length lever: a diffusion canvas is sized BEFORE generation,
+    # and its cost scales with the size — small canvas for quick asks,
+    # large when the answer needs room (the recipe default otherwise).
+    session_length = args.length
+
+    def _overrides() -> dict | None:
+        return {"gen_length": session_length} if session_length else None
+
+    # Watch mode is simply what a terminal run looks like: when
+    # stderr is a real terminal and the adapter can report its
+    # canvas, the canvas replaces the spinner (the manager forwards
+    # the callback only to adapters that support it). OLLADA_NO_WATCH
+    # in the environment turns it off; piped output never sees it.
+    watch = None
+    if "OLLADA_NO_WATCH" not in os.environ:
+        try:
+            if sys.stderr.isatty():
+                watch = _CanvasWatch()
+        except Exception:
+            watch = None
+
+    def _run_chat(messages):
+        thinking = _Thinking()
+        with thinking:
+            if watch is not None:
+                watch.on_first_frame = thinking.extinguish
+            try:
+                result = manager.chat(
+                    args.name,
+                    messages,
+                    overrides=_overrides(),
+                    force=args.force,
+                    on_step=watch,
+                )
+            finally:
+                if watch is not None:
+                    watch.finish()
+        return result, thinking.elapsed
+
     if args.prompt:
-        with _Thinking() as thinking:
-            result = manager.chat(
-                args.name, [{"role": "user", "content": args.prompt}], force=args.force
-            )
+        result, elapsed = _run_chat([{"role": "user", "content": args.prompt}])
         print(result.text)
-        print(f"({thinking.elapsed:.1f}s)", file=sys.stderr)
+        print(f"({elapsed:.1f}s)", file=sys.stderr)
         return 0
-    print(f"{args.name} — type a message, Ctrl-C to quit")
+    print(f"{args.name} — type a message, Ctrl-C to quit · /length <n> sets the canvas size")
     history: list[dict] = []
     try:
         while True:
             text = input(">>> ").strip()
             if not text:
                 continue
+            try:
+                new_length = _parse_length_command(text)
+            except ValueError as exc:
+                print(exc)
+                continue
+            if new_length is not None:
+                session_length = new_length
+                print(f"canvas length: {session_length} tokens")
+                continue
             history.append({"role": "user", "content": text})
-            with _Thinking() as thinking:
-                result = manager.chat(args.name, history, force=args.force)
+            result, elapsed = _run_chat(history)
             history.append({"role": "assistant", "content": result.text})
             print(result.text)
-            print(f"({thinking.elapsed:.1f}s)", file=sys.stderr)
+            print(f"({elapsed:.1f}s)", file=sys.stderr)
     except (KeyboardInterrupt, EOFError):
         print()
     return 0
@@ -255,6 +449,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("name")
     p.add_argument("prompt", nargs="?")
     p.add_argument("--force", action="store_true", help="load even if the fit check refuses")
+    p.add_argument(
+        "--length",
+        type=int,
+        default=None,
+        metavar="N",
+        help="canvas size in tokens (default: the recipe's gen_length)",
+    )
     p.set_defaults(fn=_cmd_run)
 
     sub.add_parser("recommend", help="which shelf models fit this machine").set_defaults(

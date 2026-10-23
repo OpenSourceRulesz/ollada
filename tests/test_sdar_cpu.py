@@ -454,3 +454,32 @@ def test_no_progress_bars_uses_hubs_function_pair_api():
                 sys.modules.pop(k, None)
             else:
                 sys.modules[k] = v
+
+
+def test_watch_pieces_states_and_spacing():
+    class _FakeTok:
+        PIECES = {1: "ĠThe", 2: "Ġcat", 3: "Ġsat", 4: "Ċ"}
+
+        def convert_ids_to_tokens(self, ids):
+            return [self.PIECES[i] for i in ids]
+
+    with _stubbed_sdar() as sdar:
+        pieces = sdar._watch_pieces(
+            _FakeTok(), [1, 99, 99, 3], mask_id=99, tentative={1: 2}
+        )
+    assert pieces == [
+        (" The", "done"),
+        (" cat", "tent"),
+        ("", "mask"),
+        (" sat", "done"),
+    ]
+
+
+def test_watch_pieces_no_tentative_means_plain_masks():
+    class _FakeTok:
+        def convert_ids_to_tokens(self, ids):
+            return ["x" for _ in ids]
+
+    with _stubbed_sdar() as sdar:
+        pieces = sdar._watch_pieces(_FakeTok(), [99, 99], mask_id=99, tentative={})
+    assert pieces == [("", "mask"), ("", "mask")]

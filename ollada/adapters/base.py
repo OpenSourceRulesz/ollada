@@ -31,6 +31,11 @@ class AdapterError(RuntimeError):
 
 class BaseAdapter:
     family = "base"
+    # Watch mode: an adapter that can report per-step canvas state
+    # during generation sets this True and accepts on_step in chat().
+    # The manager forwards a step callback only to supporting
+    # adapters; everyone else is called exactly as before.
+    supports_watch = False
 
     def __init__(self, recipe: Recipe):
         self.recipe = recipe
@@ -57,7 +62,9 @@ class BaseAdapter:
         return self.model is not None
 
     # -- generation --------------------------------------------------------
-    def chat(self, messages: list[dict], overrides: dict | None = None) -> GenResult:
+    def chat(
+        self, messages: list[dict], overrides: dict | None = None, on_step=None
+    ) -> GenResult:
         raise NotImplementedError
 
     # -- helpers ------------------------------------------------------------
