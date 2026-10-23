@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sdar:1.7b · Ollada</title>
+<link rel="stylesheet" href="../style.css">
+<link rel="icon" href="../assets/logo-badge.png">
+</head>
+<body>
+<header><div class="wrap nav">
+  <a href="../index.html"><img src="../assets/logo-badge.png" alt="Ollada — home"></a>
+  <nav>
+    <a href="../index.html#shelf">Library</a>
+    <a href="https://github.com/OpenSourceRulesz/ollada">GitHub</a>
+    <a href="https://pypi.org/project/ollada/">PyPI</a>
+  </nav>
+</div></header>
+<main class="wrap">
+
+<div class="modelhead">
+  <h1>sdar:1.7b</h1>
+  <p>SDAR 1.7B — Qwen3-1.7B converted to block diffusion; the small SDAR, and ollada&#x27;s CPU pick for machines without a GPU.</p>
+</div>
+<div class="term" style="margin:20px 0;">
+  <div><span class="c">$</span> ollada pull sdar:1.7b</div>
+  <div><span class="c">$</span> ollada run sdar:1.7b</div>
+</div>
+<div class="stats"><div class="stat"><div class="k">Verified on</div><div class="v">Dell Pro 5 14 (Intel Core Ultra 7 365) — CPU only, bf16</div></div>
+<div class="stat"><div class="k">Peak VRAM</div><div class="v">— (CPU run)</div></div>
+<div class="stat"><div class="k">Speed</div><div class="v">6.1 canvas tok/s</div></div>
+</div>
+<p class="sub">Verified 2026-10-23 through Ollada's own code. Load time
+includes the first weight download where noted in the verification notes —
+cached loads are faster. This model&#x27;s verification is a CPU run (see the notes); a GPU verification has not been run for it.</p>
+<h2 class="section">Recipe defaults</h2>
+<table><tr><td class="k">Denoising steps</td><td>4</td></tr>
+<tr><td class="k">Canvas length (tokens)</td><td>128</td></tr>
+<tr><td class="k">Block length</td><td>4</td></tr>
+<tr><td class="k">Remasking</td><td>low_confidence_dynamic</td></tr>
+<tr><td class="k">Temperature</td><td>1.0</td></tr>
+<tr><td class="k">Confidence threshold</td><td>0.9</td></tr>
+<tr><td class="k">Default quantization</td><td>bf16</td></tr>
+<tr><td class="k">Weights size (bf16)</td><td>4.1 GB</td></tr>
+<tr><td class="k">License</td><td>Apache-2.0</td></tr>
+<tr><td class="k">Source</td><td>JetLM/SDAR-1.7B-Chat</td></tr>
+</table>
+<p>Weights: <a href="https://huggingface.co/JetLM/SDAR-1.7B-Chat">JetLM/SDAR-1.7B-Chat</a> (pulled from Hugging Face —
+Ollada hosts no registry).</p>
+<h2 class="section">Verification notes</h2>
+<div class="notes">Verified on CPU through ollada&#x27;s own adapter (feat/sdar-cpu load path: bf16, no device_map, tensor mask contract — this repo&#x27;s modeling is the pre-rename revision, so the adapter&#x27;s LossKwargs alias and flash_attn SDPA stand-in both engage; see adapters/sdar.py). Fixed prompt set at recipe defaults, all correct: train-speed reasoning (90 km/h, 21.2s), one-word capital probe (exactly &#x27;Paris&#x27;, 1.9s), Fibonacci code (clean and runnable, 6.3s) — gen_length 128. The 2-step reduced config FAILS at this size (capital never commits, fib garbles): 4 steps is the floor, matching SDAR&#x27;s paper protocol. No vram_gb: this verification used no GPU. GPU verification not yet run.</div>
+
+</main>
+<footer><div class="wrap">
+  Ollada — the shelf for open-source diffusion language models. Local-first, $0 project:
+  no telemetry, no hosted registry — models come from Hugging Face, recipes are verified here.
+  Every number on this site was measured by a real-load run on the hardware named.
+</div></footer>
+</body>
+</html>

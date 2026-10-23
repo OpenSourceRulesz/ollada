@@ -47,6 +47,15 @@
   <td>2026-10-21</td>
   <td>Apache-2.0</td>
 </tr><tr>
+  <td><a href="models/sdar-1.7b.html"><code>sdar:1.7b</code></a></td>
+  <td>chat</td>
+  <td>4.1 GB</td>
+  <td>— (CPU)</td>
+  <td>6.1</td>
+  <td>bf16</td>
+  <td>2026-10-23</td>
+  <td>Apache-2.0</td>
+</tr><tr>
   <td><a href="models/sdar-4b.html"><code>sdar:4b</code></a></td>
   <td>chat</td>
   <td>8.8 GB</td>
@@ -58,14 +67,15 @@
 </tr>
 </table>
 <p class="sub">VRAM and speed were measured through Ollada's own code on the hardware
-named on each model's page (Colab Tesla T4, 2026-10-21 — single-run samples,
-treated as measured floors, not laws). Desktop verification on the RTX 5060 Ti
-is the pre-launch re-check; T4 numbers are the conservative floor. Weights
-come from Hugging Face — Ollada hosts no registry.</p>
+named on each model's page (GPU shelf: Colab Tesla T4, 2026-10-21; sdar:1.7b: a
+laptop CPU, 2026-10-23 — single-run samples, treated as measured floors, not
+laws). Desktop verification on the RTX 5060 Ti is the pre-launch re-check.
+Weights come from Hugging Face — Ollada hosts no registry.</p>
 <h2 class="section">Pull them</h2>
 <div class="term" style="margin:20px 0;">
     <div><span class="c">$</span> ollada pull diffcoder:8b</div>
     <div><span class="c">$</span> ollada pull dream:7b</div>
+    <div><span class="c">$</span> ollada pull sdar:1.7b</div>
     <div><span class="c">$</span> ollada pull sdar:4b</div>
 </div>
 
