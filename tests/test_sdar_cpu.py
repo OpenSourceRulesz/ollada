@@ -13,6 +13,12 @@ the pure load-plan helper and the flex-attention decompile contract:
 - The fused-loss restore tries the flavor's own GitHub folder first,
   then the byte-identical 4B copy (upstream carries no 1.7B folder, so
   the flavor-templated URL 404s for SDAR-1.7B-Chat).
+- The mask contract is detected from the loaded modeling module:
+  a module-level fused_flex_attention wrapper means the BlockMask
+  dialect; its absence means the bool-tensor dialect.
+- The flash_attn stand-in also registers an SDPA flash_attn_func and
+  loud stubs for the varlen / bert_padding names the pre-rename
+  modeling revision imports but never calls.
 """
 
 import contextlib
@@ -110,6 +116,70 @@ def test_kwargs_alias_noop_when_losskwargs_present():
         fake_utils = types.SimpleNamespace(LossKwargs="LK", TransformersKwargs="TK")
         assert sdar._register_kwargs_alias(fake_utils) is None
         assert fake_utils.LossKwargs == "LK"
+
+
+def _fake_model(module_name):
+    return type("FakeModel", (), {"__module__": module_name})()
+
+
+def test_mask_contract_blockmask_when_fused_flex_wrapper_present():
+    with _stubbed_sdar() as sdar:
+        module = types.ModuleType("fake_modeling_blockmask")
+        module.fused_flex_attention = lambda *a, **k: None
+        sys.modules["fake_modeling_blockmask"] = module
+        try:
+            assert (
+                sdar._detect_mask_contract(_fake_model("fake_modeling_blockmask"))
+                == "blockmask"
+            )
+        finally:
+            sys.modules.pop("fake_modeling_blockmask", None)
+
+
+def test_mask_contract_tensor_without_fused_flex_wrapper():
+    with _stubbed_sdar() as sdar:
+        module = types.ModuleType("fake_modeling_tensor")
+        sys.modules["fake_modeling_tensor"] = module
+        try:
+            assert (
+                sdar._detect_mask_contract(_fake_model("fake_modeling_tensor"))
+                == "tensor"
+            )
+            # A module that cannot be found at all also falls to tensor:
+            # the wrapper's presence is the only BlockMask evidence.
+            assert (
+                sdar._detect_mask_contract(_fake_model("fake_modeling_missing"))
+                == "tensor"
+            )
+        finally:
+            sys.modules.pop("fake_modeling_tensor", None)
+
+
+def test_flash_fallback_registers_sdpa_func_and_loud_stubs():
+    with _stubbed_sdar() as sdar:
+        keys = [
+            "flash_attn",
+            "flash_attn.ops",
+            "flash_attn.ops.triton",
+            "flash_attn.ops.triton.layer_norm",
+            "flash_attn.bert_padding",
+        ]
+        saved = {k: sys.modules.get(k) for k in keys}
+        try:
+            if sdar._register_flash_attn_fallback() == "real":
+                pytest.skip("real flash_attn installed")
+            root = sys.modules["flash_attn"]
+            assert callable(root.flash_attn_func)
+            with pytest.raises(RuntimeError):
+                root.flash_attn_varlen_func()
+            with pytest.raises(RuntimeError):
+                sys.modules["flash_attn.bert_padding"].pad_input()
+        finally:
+            for key, previous in saved.items():
+                if previous is None:
+                    sys.modules.pop(key, None)
+                else:
+                    sys.modules[key] = previous
 
 
 def test_fused_candidate_urls_flavor_first_then_4b_fallback():

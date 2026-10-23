@@ -50,6 +50,20 @@ locally against transformers 4.53.3 before the fix — see git history):
    directly, which is the API that actually accepts the cache and
    `store_kv`.
 
+5. **The two modeling revisions speak different mask dialects.**
+   Repair 3 describes the post-rename revision (4B). The pre-rename
+   revision (1.7B) instead takes a plain bool tensor mask: its
+   attention converts the mask with `.bool()`, runs SDPA with it when
+   any position is masked, and — when the mask is all-True, which is
+   every per-block decode step in the loop — calls `flash_attn_func`,
+   which does not exist off Linux/GPU. The adapter detects the loaded
+   revision's dialect at load (`_detect_mask_contract`), hands the loop
+   the mask in that dialect, and extends the repair-1 stand-in package
+   with an SDPA-based `flash_attn_func` (the all-visible case is the
+   only one that reaches it, and full attention is exactly what it
+   computes) plus loud stubs for the varlen / bert_padding names the
+   older file imports but never calls.
+
 CPU loads: when no CUDA device is present, the adapter loads on CPU at
 bfloat16 (see _resolve_load_plan) — the recipe's float16 is a T4-safe GPU
 dtype, not a CPU-viable one. This is a probe path, not a verified
@@ -120,11 +134,44 @@ def _torch_rms_norm_fn(x, weight, bias=None, eps=1e-6, **_kwargs):
     return y.to(dtype)
 
 
+def _sdpa_flash_attn_func(q, k, v, dropout_p=0.0, softmax_scale=None, causal=False, **_kwargs):
+    """SDPA equivalent of flash_attn's flash_attn_func for the stand-in
+    package. Inputs and outputs use flash-attn's (batch, seq, heads,
+    dim) layout. Only reached from the pre-rename SDAR attention's
+    all-visible branch (docstring repair 5), where full attention is
+    exactly what flash_attn_func(causal=False) computes.
+    """
+    import torch.nn.functional as F
+
+    attn = F.scaled_dot_product_attention(
+        q.transpose(1, 2),
+        k.transpose(1, 2),
+        v.transpose(1, 2),
+        attn_mask=None,
+        dropout_p=dropout_p,
+        is_causal=causal,
+        scale=softmax_scale,
+        enable_gqa=True,
+    )
+    return attn.transpose(1, 2)
+
+
+def _unavailable_flash_stub(*_args, **_kwargs):
+    raise RuntimeError(
+        "this flash_attn entry point is an import-only stub in ollada's "
+        "stand-in package (SDAR's modeling imports it but never calls "
+        "it at inference); real flash-attn is required to use it"
+    )
+
+
 def _register_flash_attn_fallback() -> str:
-    """Make `flash_attn.ops.triton.layer_norm.rms_norm_fn` importable.
+    """Make the flash_attn names SDAR's modeling imports importable.
 
     Returns "real" if flash_attn is installed, "torch-fallback" if the
-    stand-in module chain was registered in sys.modules.
+    stand-in module chain was registered in sys.modules. The stand-in
+    provides the triton rms_norm_fn (repair 1), an SDPA flash_attn_func
+    (repair 5), and loud stubs for the varlen / bert_padding names the
+    pre-rename modeling revision imports but never calls.
     """
     try:
         import flash_attn  # noqa: F401
@@ -148,6 +195,13 @@ def _register_flash_attn_fallback() -> str:
     root.ops = ops
     ops.triton = triton_pkg
     triton_pkg.layer_norm = layer_norm
+    root.flash_attn_func = _sdpa_flash_attn_func
+    root.flash_attn_varlen_func = _unavailable_flash_stub
+    bert_padding = _mod("flash_attn.bert_padding")
+    bert_padding.index_first_axis = _unavailable_flash_stub
+    bert_padding.pad_input = _unavailable_flash_stub
+    bert_padding.unpad_input = _unavailable_flash_stub
+    root.bert_padding = bert_padding
     return "torch-fallback"
 
 
@@ -174,6 +228,21 @@ def _register_kwargs_alias(utils_module=None) -> str | None:
         "transformers.utils.LossKwargs aliased to TransformersKwargs "
         "(pre-rename SDAR modeling revision)"
     )
+
+
+def _detect_mask_contract(model) -> str:
+    """Which mask dialect the loaded SDAR modeling revision speaks.
+
+    "blockmask": the revision defines a module-level fused_flex_attention
+    wrapper and its attention accepts only a flex BlockMask (the
+    post-rename revision, SDAR-4B). "tensor": no such wrapper — the
+    attention consumes a bool tensor mask directly (the pre-rename
+    revision, SDAR-1.7B). See docstring repair 5.
+    """
+    module = sys.modules.get(type(model).__module__)
+    if module is not None and hasattr(module, "fused_flex_attention"):
+        return "blockmask"
+    return "tensor"
 
 
 def _link_or_copy(src: Path, dst: Path) -> None:
@@ -288,8 +357,9 @@ def _num_transfer_tokens(block_length, steps):
 
 
 def _to_block_mask(mask3d: torch.Tensor):
-    """[1, Q, KV] 0/1 float mask -> flex-attention BlockMask (SDAR's
-    attention accepts nothing else — see adapter docstring, repair 3)."""
+    """[1, Q, KV] 0/1 float mask -> flex-attention BlockMask (the
+    post-rename revision's attention accepts nothing else; the
+    pre-rename revision takes the bool tensor itself — repairs 3, 5)."""
     from torch.nn.attention.flex_attention import create_block_mask
 
     m = mask3d[0] > 0
@@ -336,12 +406,16 @@ def _decompile_flex_attention(model) -> bool:
 
 
 
-def _forward_logits(model, input_ids, block_mask, position_ids, cache, store_kv):
+def _forward_logits(model, input_ids, mask, position_ids, cache, store_kv, mask_contract="blockmask"):
     """Drive SDAR's inner model + lm_head directly (repair 4): the outer
-    forward drops past_key_values, the inner one accepts it."""
+    forward drops past_key_values, the inner one accepts it. The mask
+    arrives as the loop's bool tensor and is converted to a flex
+    BlockMask only for the revision whose attention requires one
+    (repair 5)."""
+    attention_mask = _to_block_mask(mask) if mask_contract == "blockmask" else mask
     out = model.model(
         input_ids=input_ids,
-        attention_mask=block_mask,
+        attention_mask=attention_mask,
         position_ids=position_ids,
         past_key_values=cache,
         use_cache=True,
@@ -364,6 +438,7 @@ def _block_diffusion_generate(
     remasking_strategy="low_confidence_dynamic",
     confidence_threshold=0.9,
     stopping_ids=None,
+    mask_contract="blockmask",
 ):
     """Adapted from JetAstra/SDAR generate.py (Apache-2.0)."""
     model.eval()
@@ -391,10 +466,11 @@ def _block_diffusion_generate(
         _forward_logits(
             model,
             x[:, :prefill_length],
-            _to_block_mask(attn_mask[:, :prefill_length, :prefill_length]),
+            attn_mask[:, :prefill_length, :prefill_length],
             position_ids[:, :prefill_length],
             past_key_values,
             store_kv=True,
+            mask_contract=mask_contract,
         )
 
     transfer_counts = _num_transfer_tokens(block_length, denoising_steps)
@@ -402,17 +478,29 @@ def _block_diffusion_generate(
     for num_block in range(prefill_blocks, num_blocks):
         lo, hi = num_block * block_length, (num_block + 1) * block_length
         cur_x = x[:, lo:hi].clone()
-        cur_attn = _to_block_mask(attn_mask[:, lo:hi, :hi])
+        cur_attn = attn_mask[:, lo:hi, :hi]
         cur_pos = position_ids[:, lo:hi]
         for step in range(denoising_steps + 1):
             mask_index = cur_x == mask_id
             if mask_index.sum() == 0:
                 _forward_logits(
-                    model, cur_x, cur_attn, cur_pos, past_key_values, store_kv=True
+                    model,
+                    cur_x,
+                    cur_attn,
+                    cur_pos,
+                    past_key_values,
+                    store_kv=True,
+                    mask_contract=mask_contract,
                 )
                 break
             logits = _forward_logits(
-                model, cur_x, cur_attn, cur_pos, past_key_values, store_kv=False
+                model,
+                cur_x,
+                cur_attn,
+                cur_pos,
+                past_key_values,
+                store_kv=False,
+                mask_contract=mask_contract,
             )
             x0, x0_p = _sample(logits, temperature=temperature, top_k=top_k, top_p=top_p)
 
@@ -513,6 +601,8 @@ class SdarAdapter(BaseAdapter):
         notes.append(f"loaded dtype: {self.model.dtype}")
         if _decompile_flex_attention(self.model):
             self.load_notes.append("flex attention: eager (compile wrapper swapped out)")
+        self._mask_contract = _detect_mask_contract(self.model)
+        notes.append(f"mask contract: {self._mask_contract}")
         gen_cfg = GenerationConfig.from_pretrained(local_dir)
         eos = gen_cfg.eos_token_id
         self._stopping_ids = [eos] if isinstance(eos, int) else list(eos or [])
@@ -536,6 +626,7 @@ class SdarAdapter(BaseAdapter):
             remasking_strategy=str(params.get("remasking", "low_confidence_dynamic")),
             confidence_threshold=float(params.get("confidence_threshold", 0.9)),
             stopping_ids=self._stopping_ids,
+            mask_contract=self._mask_contract,
         )
         result = self._finish(out, input_ids.shape[1], started)
         # The canvas can leave mask tokens in unfinished tail blocks.
