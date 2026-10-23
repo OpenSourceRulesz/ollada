@@ -22,7 +22,9 @@ the pure load-plan helper and the flex-attention decompile contract:
   modeling revision imports but never calls.
 - When real triton is absent, an import stub lets the fused-loss
   module (which imports triton at module level) load; its decorated
-  kernels raise loudly if ever called.
+  kernels raise loudly if ever called. The stub is removed from
+  sys.modules when the load window closes, so later capability
+  probes see triton as genuinely absent.
 - During a triton-less load, torch.compile is neutralized to an
   identity decorator (restored afterwards, even on error), because
   the modeling's @torch.compile decorator would otherwise resolve
@@ -226,7 +228,20 @@ def test_triton_stub_registered_when_triton_absent():
             # triton.language must tolerate annotation-time access
             # (tl.constexpr is evaluated when kernel defs execute).
             assert sys.modules["triton.language"].constexpr is not None
+            # The stub's lifetime is the load window: after unregister,
+            # the process sees triton as genuinely absent again (what
+            # framework capability probes expect), while a module that
+            # imported the stub during the window keeps its reference
+            # — and its kernels still raise if ever called.
+            held_reference = sys.modules["triton"]
+            sdar._unregister_triton_stub()
+            assert "triton" not in sys.modules
+            assert "triton.language" not in sys.modules
+            with pytest.raises(RuntimeError):
+                held_reference.jit(lambda: None)()
+            sdar._unregister_triton_stub()  # idempotent
         finally:
+            sdar._unregister_triton_stub()
             for key, previous in saved.items():
                 if previous is None:
                     sys.modules.pop(key, None)

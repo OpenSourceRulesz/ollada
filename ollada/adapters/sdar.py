@@ -70,8 +70,13 @@ locally against transformers 4.53.3 before the fix — see git history):
    kernels with it. Triton ships no Windows build, and the loss class
    is never used at inference, so when real triton is absent the
    adapter registers an import stub: the decorators let the module
-   load, while any actual kernel call raises loudly. (The pre-rename
-   modeling does not import the fused module at all.)
+   load, while any actual kernel call raises loudly. The stub is
+   registered for the load window only and removed afterwards —
+   frameworks probe `import triton` to detect capability (repair 7),
+   and a lingering stub makes that probe lie at generation time too;
+   the already-imported fused module keeps its own reference, so
+   removal is safe. (The pre-rename modeling does not import the
+   fused module at all.)
 
 7. **Its @torch.compile decorator resolves the compiler backend at
    import time — against whatever `triton` it can find.** Merely
@@ -264,11 +269,15 @@ class _TritonLanguageStub:
         return self
 
 
+_TRITON_STUB_MODULES: dict[str, types.ModuleType] = {}
+
+
 def _register_triton_stub() -> str:
     """Make `import triton` survivable where no triton build exists.
 
     See docstring repair 6. Returns "real" if triton is importable,
-    otherwise registers the stub and describes it.
+    otherwise registers the stub (for the load window only — call
+    _unregister_triton_stub when the load closes) and describes it.
     """
     try:
         import triton  # noqa: F401
@@ -284,6 +293,7 @@ def _register_triton_stub() -> str:
         module.__spec__ = ModuleSpec(name, loader=None)
         module.__path__ = []
         sys.modules[name] = module
+        _TRITON_STUB_MODULES[name] = module
         return module
 
     root = _mod("triton")
@@ -297,6 +307,22 @@ def _register_triton_stub() -> str:
     language.__getattr__ = lambda _name: _TritonLanguageStub()
     root.language = language
     return "import-stub (fused-loss module is training-only; kernels raise if called)"
+
+
+def _unregister_triton_stub() -> None:
+    """Remove the repair-6 stub from sys.modules at the end of a load.
+
+    Only entries that are still the exact stub objects are removed.
+    The fused-loss module imported during the window holds its own
+    reference to the stub, so its (never-called) kernels stay as
+    defined; everything else in the process goes back to seeing
+    triton as genuinely absent, which is what framework capability
+    probes expect. No-op when no stub is registered.
+    """
+    for name, module in list(_TRITON_STUB_MODULES.items()):
+        if sys.modules.get(name) is module:
+            del sys.modules[name]
+        _TRITON_STUB_MODULES.pop(name, None)
 
 
 @contextlib.contextmanager
@@ -757,6 +783,7 @@ class SdarAdapter(BaseAdapter):
                     "no device_map, model stays on CPU"
                 )
             self.model = AutoModelForCausalLM.from_pretrained(local_dir, **kwargs)
+        _unregister_triton_stub()
         self.model.eval()
         notes.append(f"loaded dtype: {self.model.dtype}")
         self._mask_contract = _detect_mask_contract(self.model)
