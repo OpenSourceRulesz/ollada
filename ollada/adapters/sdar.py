@@ -546,15 +546,31 @@ def _no_progress_bars():
 
     The snapshot is ollada's own download step; a library progress bar
     is not ollada's UI (the CLI shows its own working indicator).
-    Falls back to a no-op where the hub helper is unavailable.
+    Hub's API is a plain function pair — disable_progress_bars() /
+    enable_progress_bars(), each returning None (verified against the
+    huggingface_hub 0.36.2 wheel source). It is NOT a context manager:
+    the first revision of this helper used it as one and crashed on
+    first real use. Falls back to a no-op where the hub helpers are
+    unavailable; if disabling itself fails, the download proceeds
+    with bars rather than not at all.
     """
     try:
-        from huggingface_hub.utils import disable_progress_bars
+        from huggingface_hub.utils import disable_progress_bars, enable_progress_bars
     except Exception:
         yield
         return
-    with disable_progress_bars():
+    try:
+        disable_progress_bars()
+    except Exception:
         yield
+        return
+    try:
+        yield
+    finally:
+        try:
+            enable_progress_bars()
+        except Exception:
+            pass
 
 
 @contextlib.contextmanager

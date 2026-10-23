@@ -357,3 +357,48 @@ def test_silence_eager_flex_warnings():
         assert "an unrelated warning" in messages
         assert not any("flex_attention" in m for m in messages)
         assert not any("return_lse" in m for m in messages)
+
+
+def test_no_progress_bars_uses_hubs_function_pair_api():
+    """Regression for the first live failure of the quiet-run build:
+    huggingface_hub's disable_progress_bars is a plain function
+    returning None (wheel source, 0.36.2), paired with
+    enable_progress_bars — not a context manager. A fake hub with
+    that exact shape must round-trip: disabled inside the block,
+    re-enabled after, and no TypeError from the with statement."""
+    calls = []
+    state = {"disabled": False}
+    hub = types.ModuleType("huggingface_hub")
+    utils = types.ModuleType("huggingface_hub.utils")
+
+    def _disable(name=None):
+        calls.append("disable")
+        state["disabled"] = True
+        return None
+
+    def _enable(name=None):
+        calls.append("enable")
+        state["disabled"] = False
+        return None
+
+    utils.disable_progress_bars = _disable
+    utils.enable_progress_bars = _enable
+    hub.utils = utils
+    saved = {
+        k: sys.modules.get(k) for k in ("huggingface_hub", "huggingface_hub.utils")
+    }
+    sys.modules.update(
+        {"huggingface_hub": hub, "huggingface_hub.utils": utils}
+    )
+    try:
+        with _stubbed_sdar() as sdar:
+            with sdar._no_progress_bars():
+                assert state["disabled"] is True
+            assert state["disabled"] is False
+            assert calls == ["disable", "enable"]
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                sys.modules.pop(k, None)
+            else:
+                sys.modules[k] = v
