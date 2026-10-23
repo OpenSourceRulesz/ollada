@@ -24,7 +24,7 @@ generate:
   top_p: 1.0
   top_k: 0
 verified:
-  hardware: "Dell Pro 5 14 (Intel Core Ultra 7 365) — CPU only, bf16"
+  hardware: "Laptop — Intel Core Ultra 7 365 (8 cores), 32GB RAM, Windows 11; CPU only, bf16"
   tokens_per_sec: 6.1      # full-length canvas rate from the verification run (130 tokens in 21.2s); short answers finish far faster via early stop (one-word probe 1.9s)
   min_host_ram_gb: 8       # observed peak RSS was 3.9 GB on the verification machine; 8 is the prudent floor the fit check enforces
   date: "2026-10-23"

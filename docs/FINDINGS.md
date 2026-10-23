@@ -146,9 +146,8 @@ regression test. The gate is not theatre; it has caught us too.
 ## 7. Addendum (2026-10-23): SDAR on CPU — no GPU at all
 
 Two days after the T4 work, we asked whether any of the shelf could
-run on a machine with no GPU at all: a Dell Pro 5 14 (Intel Core
-Ultra 7 365, 8 cores, 32GB RAM, Windows 11) — an ordinary managed
-work laptop. For SDAR the answer is yes, measured end-to-end through
+run on a machine with no GPU at all: a laptop (Intel Core Ultra 7
+365, 8 cores, 32GB RAM, Windows 11) — an ordinary work laptop. For SDAR the answer is yes, measured end-to-end through
 Ollada's own adapter, bf16, no quantization:
 
 | Model | Train problem (reasoning) | One-word probe | Fibonacci code | Peak host RAM |

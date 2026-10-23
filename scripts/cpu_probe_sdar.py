@@ -191,7 +191,7 @@ def run_probe(args) -> dict:
     except ImportError:
         raise _fail(
             "torch is not importable in this environment. Install CPU torch "
-            "first (see the Dell sheet: pip install --index-url "
+            "first (pip install --index-url "
             "https://download.pytorch.org/whl/cpu torch)."
         )
 

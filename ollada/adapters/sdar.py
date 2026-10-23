@@ -399,7 +399,7 @@ def _detect_mask_contract(model) -> str:
     live namespace: _decompile_flex_attention assigns
     module.fused_flex_attention at load, so a namespace check made
     after that step finds the adapter's own assignment and reports
-    "blockmask" for every revision (the Dell run #4 bug, 2026-10-23).
+    "blockmask" for every revision (the CPU-branch run #4 bug, 2026-10-23).
     """
     module = sys.modules.get(type(model).__module__)
     source = ""

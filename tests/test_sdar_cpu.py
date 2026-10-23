@@ -175,7 +175,7 @@ def _fake_model(module_name):
 
 def test_mask_contract_detection_reads_source_not_namespace(tmp_path):
     with _stubbed_sdar() as sdar:
-        # Regression pin for Dell run #4: _decompile_flex_attention
+        # Regression pin for CPU run #4: _decompile_flex_attention
         # ASSIGNS module.fused_flex_attention at load, so a namespace
         # check made afterwards reports "blockmask" for every revision.
         # Detection must read the modeling source. The tensor fake

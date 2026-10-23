@@ -17,7 +17,7 @@ One command installs it, one command runs a diffusion model, models have short n
 pip install <name>
 <name> pull diffcoder:8b
 <name> run diffcoder:8b
-<name> serve            # http://localhost:11435 (not 11434 — avoids the known Ollama/VS Code clash on Dallas's Dell)
+<name> serve            # http://localhost:11435 (not 11434 — avoids the known Ollama/VS Code clash on the work laptop)
 ```
 
 **In scope for v0.1:**
@@ -130,14 +130,14 @@ If a model fails, it stays off the shelf and the failure is documented. No vendo
 ## 8. Risks & kill criteria
 - **Transformers fragility** (biggest known risk — it bit npc-engine twice): mitigate with per-family pins + the §7 gate on every release. If a family needs a *fork* to stay working, that family gets cut, not the project.
 - **Adapter sprawl:** if family #4 requires a materially different runtime (e.g. SGLang-only), stop and re-decide scope instead of growing a second engine quietly.
-- **Expectation trap:** people will try it on CPU laptops (like the Dell) and conclude diffusion is slow. Mitigate by positioning GPU-first everywhere, and giving the 1.7B an honest "CPU: try-it speed" label later.
+- **Expectation trap:** people will try it on CPU laptops and conclude diffusion is slow. Mitigate by positioning GPU-first everywhere, and giving the 1.7B an honest "CPU: try-it speed" label later.
 - **Trademark:** do NOT name it anything containing "Ollama" (their mark) or "Llama" (Meta's). Working title "Diffusion Shelf" is descriptive only.
 - **Kill criterion:** if, after Phase 2, none of the 3 models gives a *good* experience on a free T4, the honest move is to stop at a research repo + write-up, not ship a shelf we wouldn't use ourselves.
 
 ## 9. Decisions needed from Dallas (one round, then Phase 0 starts)
 1. **Name** — Dallas's direction (2026-10-21): do Ollama's naming move again. Ollama launched around **LLaMA** (Meta's first big open AR model); the first big open *text-diffusion* model is **LLaDA** (Feb 2025, Renmin / Ant Group — see plan notes). So: **Ollada** (O + Llada). Availability checked 2026-10-21 (404 = free at check time, controls `fftp`/`ollama` correctly returned 200; availability is not a trademark clearance): `ollada` is free on **both PyPI and Hugging Face**. Fallbacks also free on PyPI: `allada`, `lladama`, `dllada`, `diffshelf`, `diffserve`, `dllm`, `maskserve`. Note: LLaDA itself is Renmin/Ant's model name — Ollada is a distinct coinage in the same spirit as Ollama vs Llama, but a real trademark sanity check is a Phase 0 task, not an assumption.
 2. **First shelf** — approve the 3-model MVP (dream:7b / sdar:4b / diffcoder:8b), or swap one.
-3. **First hardware target** — RESOLVED 2026-10-21: Dallas's personal gaming desktop, an **RTX 5060 Ti 16GB** (variant confirmed by Dallas; Blackwell, 4,608 CUDA cores, 16GB GDDR7 — runs the full 8B shelf in 8-bit comfortably). This is also the archetypal target-user machine: Ollama's audience is people with consumer gaming GPUs on Windows. **Sequencing:** development + first verification happen on **Colab T4 now** (Dallas can't use the desktop at the moment). This does not change the design: the T4 is also 16GB, so every VRAM fit / quantization decision transfers 1:1. What does NOT transfer is speed — all published numbers stay labelled with the hardware they were measured on, T4 numbers will read as pessimistic vs the 5060 Ti, and a re-verification pass on the desktop is a required pre-launch gate. One dtype nuance: the T4 (Turing) has no native bf16 acceleration, so T4 recipes default to fp16 / 8-bit; the 5060 Ti (Blackwell) can use bf16 recipes. The work Dell (32GB, Intel integrated graphics) is explicitly NOT a target — it's a CPU-only smoke-test machine at best.
+3. **First hardware target** — RESOLVED 2026-10-21: Dallas's personal gaming desktop, an **RTX 5060 Ti 16GB** (variant confirmed by Dallas; Blackwell, 4,608 CUDA cores, 16GB GDDR7 — runs the full 8B shelf in 8-bit comfortably). This is also the archetypal target-user machine: Ollama's audience is people with consumer gaming GPUs on Windows. **Sequencing:** development + first verification happen on **Colab T4 now** (Dallas can't use the desktop at the moment). This does not change the design: the T4 is also 16GB, so every VRAM fit / quantization decision transfers 1:1. What does NOT transfer is speed — all published numbers stay labelled with the hardware they were measured on, T4 numbers will read as pessimistic vs the 5060 Ti, and a re-verification pass on the desktop is a required pre-launch gate. One dtype nuance: the T4 (Turing) has no native bf16 acceleration, so T4 recipes default to fp16 / 8-bit; the 5060 Ti (Blackwell) can use bf16 recipes. The work laptop (32GB, Intel integrated graphics) is explicitly NOT a target — it's a CPU-only smoke-test machine at best.
 4. **Public posture** — local-first like npc-engine started (build, verify, then a separate go for public), recommended. No public step is bundled into the build go.
 
 ## 10. What success looks like

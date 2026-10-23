@@ -12,7 +12,7 @@ quant_default: bf16        # fits 16GB cards whole; int8 optional for 8GB cards
 dtype: float16             # T4-safe (weights are bf16; fp16 load per the reference script's default)
 env:
   transformers: ">=4.57" # its modeling imports TransformersKwargs (added in 4.57); the README's >=4.52.4 is stale. NOT the Dream env — see the adapter docstring for the three load-time repairs (flash_attn fallback, missing HF file, BlockMask-only attention)
-  extras: [torch, accelerate, einops] # einops: the 4B modeling does `from einops import rearrange`; a clean env without it cannot load the model (found on the Dell CPU runs, 2026-10-23; Colab had it ambiently)
+  extras: [torch, accelerate, einops] # einops: the 4B modeling does `from einops import rearrange`; a clean env without it cannot load the model (found on the laptop CPU runs, 2026-10-23; Colab had it ambiently)
 generate:
   gen_length: 256
   block_length: 4          # reference config: block 4, 4 denoising steps
