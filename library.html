@@ -15,6 +15,12 @@
     <a href="https://github.com/OpenSourceRulesz/ollada">GitHub</a>
     <a href="https://pypi.org/project/ollada/">PyPI</a>
   </nav>
+  <button class="navtoggle" type="button" aria-expanded="false" aria-controls="navmenu" aria-label="Menu"><span></span><span></span></button>
+  <div class="navmenu" id="navmenu">
+    <a href="index.html#shelf">Library <span aria-hidden="true">→</span></a>
+    <a href="https://github.com/OpenSourceRulesz/ollada">GitHub <span aria-hidden="true">→</span></a>
+    <a href="https://pypi.org/project/ollada/">PyPI <span aria-hidden="true">→</span></a>
+  </div>
 </div></header>
 <main class="wrap">
 
@@ -85,5 +91,23 @@ Weights come from Hugging Face — Ollada hosts no registry.</p>
   no telemetry, no hosted registry — models come from Hugging Face, recipes are verified here.
   Every number on this site was measured by a real-load run on the hardware named.
 </div></footer>
+<script>
+(function(){
+  var btn = document.querySelector('.navtoggle');
+  var menu = document.getElementById('navmenu');
+  if (!btn || !menu) return;
+  function close(){ menu.classList.remove('open'); btn.setAttribute('aria-expanded', 'false'); }
+  btn.addEventListener('click', function(e){
+    e.stopPropagation();
+    var open = menu.classList.toggle('open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  document.addEventListener('click', function(e){
+    if (!menu.contains(e.target) && e.target !== btn) close();
+  });
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape') close(); });
+  menu.addEventListener('click', function(e){ if (e.target.closest('a')) close(); });
+})();
+</script>
 </body>
 </html>
