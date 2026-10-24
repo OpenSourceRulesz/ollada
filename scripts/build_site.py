@@ -235,10 +235,9 @@ def index_body(models: list[dict]) -> str:
      The same idea <strong>Ollama</strong> proved for autoregressive models,
      rebuilt for diffusion.</p>
   <div class="term">
-    <div><span class="c">$</span> pip install ollada</div>
-    <div><span class="c">$</span> ollada pull diffcoder:8b</div>
-    <div><span class="c">$</span> ollada run diffcoder:8b</div>
-    <div><span class="c">$</span> ollada serve <span class="c"># local API on http://localhost:11435</span></div>
+    <div><span class="c">$</span> pip install "ollada[cpu]" <span class="c"># laptop, no GPU needed</span></div>
+    <div><span class="c">$</span> ollada pull sdar:1.7b</div>
+    <div><span class="c">$</span> ollada run sdar:1.7b</div>
   </div>
   <!--CANVAS-->
 </div>
@@ -280,6 +279,7 @@ def model_body(m: dict) -> str:
   <p>{esc(m.get('description', ''))}</p>
 </div>
 <div class="term" style="margin:20px 0;">
+  <div><span class="c">$</span> pip install "ollada[{'cpu' if 'CPU' in v.get('hardware', '') else 'gpu'}]"</div>
   <div><span class="c">$</span> ollada pull {esc(m['name'])}</div>
   <div><span class="c">$</span> ollada run {esc(m['name'])}</div>
 </div>

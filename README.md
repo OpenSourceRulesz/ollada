@@ -11,11 +11,12 @@ Ollama is where people go to get open-source autoregressive models: clean names,
 **Ollada** is building the equivalent for diffusion:
 
 ```bash
-pip install ollada
-ollada pull diffcoder:8b
-ollada run diffcoder:8b
-ollada serve   # local API on http://localhost:11435
+pip install "ollada[cpu]"   # laptop, no GPU needed
+ollada pull sdar:1.7b
+ollada run sdar:1.7b
 ```
+
+On a GPU machine, `pip install "ollada[gpu]"` instead (adds bitsandbytes and einops for the GPU shelf), then `ollada pull diffcoder:8b` / `ollada run diffcoder:8b`. `ollada serve` needs `pip install "ollada[server]"` — the local API on http://localhost:11435. Bare `pip install ollada` gives you only the shelf commands (`list` / `show` / `recommend`); it can't load a model. Quotes around the brackets are for PowerShell; on bash/zsh they're optional. CPU-only machine? Install torch from the CPU index first — `pip install torch --index-url https://download.pytorch.org/whl/cpu` — and pip will reuse it instead of downloading the ~2GB CUDA bundle.
 
 - **Curated library, short names** — `dream:7b`, `sdar:4b`, `diffcoder:8b`, `sdar:1.7b`. A model is on the shelf only after a real-load verification run through Ollada's own code on named hardware — a real GPU for the flagship shelf; `sdar:1.7b` is the first CPU-verified entry (an ordinary laptop, no GPU).
 - **Verified recipes, not homework** — the steps / block size / threshold / quantization that actually work are baked into each model's recipe, tested and published with the hardware they were measured on.

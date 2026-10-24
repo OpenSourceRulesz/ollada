@@ -22,7 +22,11 @@ classifiers = [
 dependencies = ["pyyaml>=6.0"]
 
 [project.optional-dependencies]
-gpu = ["torch", "transformers", "accelerate", "bitsandbytes", "huggingface-hub"]
+# cpu: everything needed to run the CPU-verified models (SDAR on a laptop).
+# gpu: the same, plus bitsandbytes (quantized CUDA loads) and einops
+# (SDAR-4B's upstream modeling imports it under trust_remote_code).
+cpu = ["torch", "transformers", "accelerate", "huggingface-hub"]
+gpu = ["torch", "transformers", "accelerate", "bitsandbytes", "huggingface-hub", "einops"]
 server = ["fastapi", "uvicorn"]
 dev = ["pytest"]
 
