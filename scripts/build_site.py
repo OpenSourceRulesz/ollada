@@ -101,7 +101,7 @@ PAGE = """<!DOCTYPE html>
 </head>
 <body>
 <header><div class="wrap nav">
-  <a href="{root}index.html" class="brand"><img src="{root}assets/logo.svg" alt="">ollada</a>
+  <a href="{root}index.html" class="brand"><img src="{root}assets/logo.svg" alt="">Ollada</a>
   <nav>
     <a href="{root}index.html#shelf">Library</a>
     <a href="https://github.com/OpenSourceRulesz/ollada">GitHub</a>
