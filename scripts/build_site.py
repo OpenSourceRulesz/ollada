@@ -77,6 +77,7 @@ h2.section { font-size:24px; margin:42px 0 6px; }
 .stat .k { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--mut); }
 .stat .v { font-size:19px; font-weight:650; margin-top:2px; }
 table { border-collapse:collapse; width:100%; margin:10px 0 20px; font-size:15px; }
+.tablewrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
 td { border-top:1px solid var(--line); padding:7px 10px 7px 0; vertical-align:top; }
 td.k { color:var(--mut); width:210px; }
 code { font-family:ui-monospace,'Cascadia Mono',Consolas,monospace; font-size:.92em;
@@ -103,6 +104,7 @@ footer { border-top:1px solid var(--line); margin-top:54px; padding:22px 0 34px;
   .navmenu a:hover { color:var(--indigo); }
   .navmenu a span { color:#A8B0BE; }
   .term { font-size:13px; padding:14px 16px; -webkit-overflow-scrolling:touch; }
+  td.k { width:120px; }
 }
 """
 
@@ -196,7 +198,7 @@ def card(m: dict) -> str:
     v = m.get("verified", {})
     ver_cls = "ver" if v.get("vram_gb") else "cpu"
     cpu_badge = ('\n    <span class="badge cpu">CPU ✓</span>'
-                 if m["name"] == "sdar:4b" else "")
+                 if m.get("cpu_verified") else "")
     return f"""
 <a class="card" href="models/{slug(m['name'])}.html">
   <h3>{esc(m['name'])}</h3>
@@ -316,6 +318,11 @@ def model_body(m: dict) -> str:
     rows = "\n".join(f'<tr><td class="k">{esc(k)}</td><td>{esc(val)}</td></tr>'
                      for k, val in gen_defaults(m))
     src = esc(m.get("source", ""))
+    cpu = m.get("cpu_verified", {})
+    cpu_html = (f'\n<p class="sub">Also verified on CPU: {esc(cpu.get("hardware", ""))} '
+                f'({esc(cpu.get("date", ""))}) — peak host RAM '
+                f'{esc(cpu.get("peak_host_ram_gb"))} GB. {esc(cpu.get("notes", ""))}</p>'
+                if cpu else "")
     return f"""
 <div class="modelhead">
   <h1>{esc(m['name'])}</h1>
@@ -330,7 +337,7 @@ def model_body(m: dict) -> str:
 </div>
 <p class="sub">Verified {esc(v.get('date', ''))} through Ollada's own code. Load time
 includes the first weight download where noted in the verification notes —
-cached loads are faster. {esc("This model's verification is a CPU run (see the notes); a GPU verification has not been run for it." if "CPU" in v.get("hardware", "") else "Desktop verification (RTX 5060 Ti) is the pre-launch re-check; T4 numbers are the conservative floor.")}</p>
+cached loads are faster. {esc("This model's verification is a CPU run (see the notes); a GPU verification has not been run for it." if "CPU" in v.get("hardware", "") else "Desktop verification (RTX 5060 Ti) is the pre-launch re-check; T4 numbers are the conservative floor.")}</p>{cpu_html}
 <h2 class="section">Recipe defaults</h2>
 <table>{rows}
 </table>
@@ -366,12 +373,14 @@ def library_body(models: list[dict]) -> str:
      One page per model carries the full recipe and verification notes.</p>
 </div>
 <h2 class="section">The shelf</h2>
+<div class="tablewrap">
 <table>
 <tr><td class="k">Model</td><td class="k">Task</td><td class="k">Weights (bf16)</td>
     <td class="k">Peak VRAM, measured</td><td class="k">Speed, canvas tok/s</td>
     <td class="k">Default quant</td><td class="k">Verified</td><td class="k">License</td></tr>
 {"".join(rows)}
 </table>
+</div>
 <p class="sub">VRAM and speed were measured through Ollada's own code on the hardware
 named on each model's page (GPU shelf: Colab Tesla T4, 2026-10-21; sdar:1.7b: a
 laptop CPU, 2026-10-23 — single-run samples, treated as measured floors, not

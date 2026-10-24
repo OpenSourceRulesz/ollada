@@ -30,3 +30,11 @@ verified:
   load_seconds: 45.1
   date: "2026-10-21"
   notes: "Verified WITH ollada's load repairs active (torch RMSNorm fallback for flash_attn, authors' fused file restored from GitHub, BlockMask loop, eager flex attention, inner-model drive — see adapters/sdar.py). Quality at recipe defaults: math correct with clean steps; Fibonacci correct and runnable (better than dream:7b's garbled attempt); 3-item list complete (dream truncated its own); one-word instruction probe answered exactly 'Paris'. Speed is eager-flex-bound on T4 (scores matrix materialized); compiled flex is a Phase 2 revisit. Colab note: the standard-RAM T4 runtime was not enough during load — High-RAM runtime worked; GPU VRAM itself peaked at only 8.87GB."
+# Second verification, CPU only — drives the card's CPU badge and the model
+# page's CPU addendum (both used to be hardcoded/undocumented). The runtime
+# recipe loader ignores unknown keys, so this is site-builder data only.
+cpu_verified:
+  hardware: "Laptop — Intel Core Ultra 7 365 (8 cores), 32GB RAM, Windows 11; CPU only, bf16"
+  peak_host_ram_gb: 8.6
+  date: "2026-10-23"
+  notes: "Fixed prompt set at recipe defaults, all correct — train-speed reasoning 63.5s, one-word capital probe exactly 'Paris' 2.4s, Fibonacci code 16.2s. The 2-step reduced config garbled Fibonacci: 4 steps is the floor. See FINDINGS §7."
