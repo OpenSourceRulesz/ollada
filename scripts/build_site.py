@@ -205,7 +205,7 @@ def card(m: dict) -> str:
     <span class="badge">{esc(m.get('task', ''))}</span>
     <span class="badge">{esc(m.get('license', ''))}</span>
     <span class="badge">{esc(m.get('size_gb_bf16'))} GB</span>
-    <span class="badge {ver_cls}">verified · {esc(f"{v['vram_gb']} GB VRAM" if v.get('vram_gb') else "CPU (no GPU)")} · {esc(v.get('tokens_per_sec'))} tok/s</span>{cpu_badge}
+    <span class="badge {ver_cls}">verified · {esc(f"{v['vram_gb']} GB VRAM" if v.get('vram_gb') else "CPU")} · {esc(v.get('tokens_per_sec'))} tok/s</span>{cpu_badge}
   </div>
 </a>"""
 
