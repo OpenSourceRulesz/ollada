@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ollada — the shelf for open-source diffusion language models</title>
 <link rel="stylesheet" href="style.css">
-<link rel="icon" href="assets/logo-badge.png">
+<link rel="icon" type="image/svg+xml" href="assets/logo.svg">
 </head>
 <body>
 <header><div class="wrap nav">
-  <a href="index.html"><img src="assets/logo-badge.png" alt="Ollada — home"></a>
+  <a href="index.html" class="brand"><img src="assets/logo.svg" alt="">ollada</a>
   <nav>
     <a href="index.html#shelf">Library</a>
     <a href="https://github.com/OpenSourceRulesz/ollada">GitHub</a>
@@ -30,6 +30,54 @@
     <div><span class="c">$</span> ollada run diffcoder:8b</div>
     <div><span class="c">$</span> ollada serve <span class="c"># local API on http://localhost:11435</span></div>
   </div>
+  
+<div class="canvasbox">
+  <div class="chead"><span>sdar:1.7b · watch it write</span></div>
+  <div class="ctext" id="ctext"></div>
+  <div class="cfoot"><span id="cstat">block 1/3 · step 1/4</span></div>
+</div>
+<p class="canvasnote">An illustrative replay of the terminal's watch view — run <code>ollada run sdar:1.7b</code> and it's live.</p>
+<script>
+(function(){
+  var blocks = [
+    'The house on Alder Lane had stood for two hundred years, through wars, weddings, and winters that split its stones.',
+    'The storm arrived at midnight, patient at first, testing every shutter and leaning on the old chimney.',
+    'Then it stopped asking. The roof lifted like a held breath, let go at last, and two centuries ended in one loud minute.'
+  ];
+  var swaps = { storm: 'wind', roof: 'walls' };
+  var box = document.getElementById('ctext'), stat = document.getElementById('cstat');
+  var words = blocks.map(function(b){ return b.split(' '); });
+  function frame(bi, step){
+    var html = '';
+    for (var b = 0; b < words.length; b++){
+      for (var w = 0; w < words[b].length; w++){
+        var word = words[b][w];
+        if (b < bi) html += '<span>' + word + '</span> ';
+        else if (b > bi) html += '<span class="mk"></span> ';
+        else {
+          var shown = Math.floor(words[b].length * (step / 4));
+          if (w < shown){
+            var disp = word;
+            if (step < 4 && swaps[word] && w >= shown - 1) disp = swaps[word];
+            html += (step === 4 ? '<span>' + disp + '</span> ' : '<span class="tent">' + disp + '</span> ');
+          } else html += '<span class="mk"></span> ';
+        }
+      }
+    }
+    box.innerHTML = html;
+    stat.textContent = bi >= words.length ? 'done · drafted whole, refined block by block' : 'block ' + (bi + 1) + '/' + words.length + ' · step ' + Math.min(step + 1, 4) + '/4';
+  }
+  var bi = 0, step = 0; frame(0, 0);
+  setInterval(function(){
+    step++;
+    if (step > 4){ step = 1; bi++; }
+    if (bi >= words.length){ frame(words.length, 4); bi = -1; step = 0; return; }
+    if (bi < 0){ bi = 0; }
+    frame(bi, step);
+  }, 430);
+})();
+</script>
+
 </div>
 
 <h2 class="section" id="shelf">Library</h2>
@@ -66,7 +114,7 @@ measured VRAM, speed, and quality on named hardware. No vendor benchmarks.
     <span class="badge">chat</span>
     <span class="badge">Apache-2.0</span>
     <span class="badge">4.1 GB</span>
-    <span class="badge ver">verified · CPU (no GPU) · 6.1 tok/s</span>
+    <span class="badge cpu">verified · CPU (no GPU) · 6.1 tok/s</span>
   </div>
 </a>
 
@@ -78,6 +126,7 @@ measured VRAM, speed, and quality on named hardware. No vendor benchmarks.
     <span class="badge">Apache-2.0</span>
     <span class="badge">8.8 GB</span>
     <span class="badge ver">verified · 8.87 GB VRAM · 12.3 tok/s</span>
+    <span class="badge cpu">CPU ✓</span>
   </div>
 </a>
 </div>
