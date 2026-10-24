@@ -52,6 +52,7 @@ h2.section { font-size:24px; margin:42px 0 6px; }
 .stat .k { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--mut); }
 .stat .v { font-size:19px; font-weight:650; margin-top:2px; }
 table { border-collapse:collapse; width:100%; margin:10px 0 20px; font-size:15px; }
+.tablewrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
 td { border-top:1px solid var(--line); padding:7px 10px 7px 0; vertical-align:top; }
 td.k { color:var(--mut); width:210px; }
 code { font-family:ui-monospace,'Cascadia Mono',Consolas,monospace; font-size:.92em;
@@ -78,4 +79,5 @@ footer { border-top:1px solid var(--line); margin-top:54px; padding:22px 0 34px;
   .navmenu a:hover { color:var(--indigo); }
   .navmenu a span { color:#A8B0BE; }
   .term { font-size:13px; padding:14px 16px; -webkit-overflow-scrolling:touch; }
+  td.k { width:120px; }
 }
