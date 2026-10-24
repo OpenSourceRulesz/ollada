@@ -689,6 +689,91 @@ def _decompile_flex_attention(model) -> bool:
 
 
 
+_SDPA_EXPERIMENT_ENV = "OLLADA_SDAR_SDPA"
+
+
+def _attention_mode_from_env(env=None) -> str:
+    """Pure: which attention path a blockmask load takes.
+
+    "sdpa" only when OLLADA_SDAR_SDPA=1 — the Experiment-1 switch
+    (2026-10-24): densify the BlockMask and run SDPA instead of eager
+    flex for the 4B, because eager flex is the one configuration with
+    no published CPU support while the 1.7B already proves the SDPA
+    route on this machine. Anything else (unset, empty, any other
+    value) means the default eager flex path. Deliberately strict: a
+    typo must not silently change the attention kernel.
+    """
+    if env is None:
+        env = os.environ
+    return "sdpa" if env.get(_SDPA_EXPERIMENT_ENV) == "1" else "eager"
+
+
+def _sdpa_kwargs(kwargs: dict) -> dict:
+    """Pure: the kwargs an SDPA call accepts from a flex call's kwargs.
+
+    flex_attention takes enable_gqa, scale, return_lse; SDPA takes the
+    first two plus is_causal (always False here — the mask itself
+    carries the causality) and rejects return_lse. Dropping it is
+    load-bearing: passing it through would crash every forward.
+    """
+    out = {"is_causal": False}
+    if "scale" in kwargs:
+        out["scale"] = kwargs["scale"]
+    if "enable_gqa" in kwargs:
+        out["enable_gqa"] = kwargs["enable_gqa"]
+    return out
+
+
+def _swap_flex_to_sdpa(model) -> bool:
+    """Swap SDAR's fused_flex_attention for an SDPA stand-in (Exp. 1).
+
+    The 4B modeling calls fused_flex_attention(query, key, value,
+    attention_mask=BlockMask, enable_gqa=True, scale=..., return_lse=True)
+    and unpacks TWO values, tolerating None weights (its own guard:
+    `attn_weights.to(...) if attn_weights is not None else None`).
+    The stand-in therefore returns (sdpa_output, None) — the same shape
+    the 1.7B's own attention returns. The dense mask comes from
+    BlockMask.to_dense(): a bool tensor with True = attend, exactly the
+    convention the 1.7B's SDPA call already consumes (its mask is the
+    loop's 0/1 mask through .bool()).
+
+    Raises AdapterError if the swap fails, and wraps a missing
+    to_dense() the same way — same loud-failure rule as the eager
+    decompile: a half-swapped attention must never silently run, and a
+    torch build without to_dense() must fail with its name on the
+    error, not as a bare AttributeError mid-generation.
+    """
+    import importlib
+
+    try:
+        module = importlib.import_module(model.__class__.__module__)
+
+        def sdpa_flex_attention(query, key, value, attention_mask, **kwargs):
+            try:
+                dense = attention_mask.to_dense()
+            except AttributeError as exc:
+                raise AdapterError(
+                    "SDAR SDPA experiment: this torch build's BlockMask "
+                    "has no to_dense() — cannot densify the mask for SDPA."
+                ) from exc
+            return (
+                F.scaled_dot_product_attention(
+                    query, key, value, attn_mask=dense, **_sdpa_kwargs(kwargs)
+                ),
+                None,
+            )
+
+        module.fused_flex_attention = sdpa_flex_attention
+    except AdapterError:
+        raise
+    except Exception as exc:
+        raise AdapterError(
+            "SDAR SDPA experiment swap failed: could not replace "
+            "fused_flex_attention with the SDPA stand-in."
+        ) from exc
+    return True
+
+
 def _forward_logits(model, input_ids, mask, position_ids, cache, store_kv, mask_contract="blockmask"):
     """Drive SDAR's inner model + lm_head directly (repair 4): the outer
     forward drops past_key_values, the inner one accepts it. The mask
@@ -969,8 +1054,14 @@ class SdarAdapter(BaseAdapter):
         notes.append(f"loaded dtype: {self.model.dtype}")
         self._mask_contract = _detect_mask_contract(self.model)
         notes.append(f"mask contract: {self._mask_contract}")
-        if self._mask_contract == "blockmask" and _decompile_flex_attention(self.model):
-            self.load_notes.append("flex attention: eager (compile wrapper swapped out)")
+        if self._mask_contract == "blockmask":
+            if _attention_mode_from_env() == "sdpa" and _swap_flex_to_sdpa(self.model):
+                self.load_notes.append(
+                    "flex attention: EXPERIMENTAL SDPA (OLLADA_SDAR_SDPA=1) — "
+                    "BlockMask densified via to_dense(), eager flex bypassed"
+                )
+            elif _decompile_flex_attention(self.model):
+                self.load_notes.append("flex attention: eager (compile wrapper swapped out)")
         gen_cfg = GenerationConfig.from_pretrained(local_dir)
         eos = gen_cfg.eos_token_id
         self._stopping_ids = [eos] if isinstance(eos, int) else list(eos or [])

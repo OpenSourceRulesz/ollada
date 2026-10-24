@@ -352,6 +352,62 @@ def test_decompile_success_swaps_in_the_eager_call():
             sys.modules.pop("fake_sdar_modeling", None)
 
 
+def test_sdpa_experiment_flag_is_strict():
+    with _stubbed_sdar() as sdar:
+        assert sdar._attention_mode_from_env({}) == "eager"
+        assert sdar._attention_mode_from_env({"OLLADA_SDAR_SDPA": "1"}) == "sdpa"
+        assert sdar._attention_mode_from_env({"OLLADA_SDAR_SDPA": "yes"}) == "eager"
+        assert sdar._attention_mode_from_env({"OLLADA_SDAR_SDPA": ""}) == "eager"
+
+
+def test_sdpa_kwargs_drop_return_lse():
+    with _stubbed_sdar() as sdar:
+        assert sdar._sdpa_kwargs(
+            {"enable_gqa": True, "scale": 0.25, "return_lse": True}
+        ) == {"is_causal": False, "scale": 0.25, "enable_gqa": True}
+        assert sdar._sdpa_kwargs({}) == {"is_causal": False}
+
+
+def test_sdpa_swap_returns_none_weights_and_dense_mask():
+    with _stubbed_sdar() as sdar:
+        sdar.F.scaled_dot_product_attention = lambda *a, **k: ("sdpa", a, k)
+        modeling = types.ModuleType("fake_sdar_modeling_sdpa")
+        modeling.fused_flex_attention = "compiled-wrapper"
+        sys.modules["fake_sdar_modeling_sdpa"] = modeling
+        try:
+            FakeModel = type("FakeModel", (), {"__module__": "fake_sdar_modeling_sdpa"})
+            assert sdar._swap_flex_to_sdpa(FakeModel()) is True
+            fake_mask = types.SimpleNamespace(to_dense=lambda: "dense-mask")
+            out, weights = modeling.fused_flex_attention(
+                "q", "k", "v",
+                attention_mask=fake_mask,
+                enable_gqa=True, scale=0.5, return_lse=True,
+            )
+            # The 4B caller unpacks two values and tolerates None
+            # weights — the stand-in must return exactly that shape,
+            # with the densified mask and SDPA's kwargs only.
+            assert weights is None
+            assert out == (
+                "sdpa",
+                ("q", "k", "v"),
+                {
+                    "attn_mask": "dense-mask",
+                    "is_causal": False,
+                    "scale": 0.5,
+                    "enable_gqa": True,
+                },
+            )
+        finally:
+            sys.modules.pop("fake_sdar_modeling_sdpa", None)
+
+
+def test_sdpa_swap_failure_raises_loudly():
+    with _stubbed_sdar() as sdar:
+        FakeModel = type("FakeModel", (), {"__module__": "no_such_modeling_module"})
+        with pytest.raises(sdar.AdapterError, match="SDPA experiment swap failed"):
+            sdar._swap_flex_to_sdpa(FakeModel())
+
+
 def test_no_progress_bars_tolerates_missing_hub():
     with _stubbed_sdar() as sdar:
         # The stub environment has no huggingface_hub: the helper must
