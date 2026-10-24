@@ -23,7 +23,8 @@ CATALOG = ROOT / "ollada" / "catalog"
 ASSETS = ROOT / "docs" / "assets"
 
 CSS = """
-:root { --ink:#111; --mut:#555; --line:#e5e2dc; --card:#faf9f7; --accent:#b5541d; }
+:root { --ink:#111; --mut:#555; --line:#e5e2dc; --card:#faf9f7; --accent:#b5541d;
+        --indigo:#6C6FD8; --ver:#3F7A3A; }
 * { box-sizing:border-box; }
 body { margin:0; font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
        color:var(--ink); background:#fff; line-height:1.55; }
@@ -31,18 +32,30 @@ a { color:var(--ink); }
 .wrap { max-width:880px; margin:0 auto; padding:0 20px; }
 header { border-bottom:1px solid var(--line); }
 .nav { display:flex; align-items:center; gap:12px; padding:14px 0; }
-.nav img { width:40px; height:40px; display:block; }
+.nav img { width:34px; height:34px; display:block; }
 .nav .brand { font-weight:700; font-size:20px; text-decoration:none; }
+.nav a.brand { display:flex; align-items:center; gap:9px; }
 .nav nav { margin-left:auto; display:flex; gap:18px; }
 .nav nav a { text-decoration:none; color:var(--mut); font-size:15px; }
 .nav nav a:hover { color:var(--ink); }
 .hero { text-align:center; padding:48px 0 30px; }
-.hero img { width:110px; }
 .hero h1 { font-size:40px; margin:14px 0 8px; letter-spacing:-0.5px; }
 .hero p { color:var(--mut); font-size:19px; max-width:620px; margin:0 auto; }
 .term { background:#111; color:#f2f2f2; border-radius:12px; padding:18px 22px;
         font-family:ui-monospace,'Cascadia Mono',Consolas,monospace; font-size:15px;
-        max-width:560px; margin:28px auto; text-align:left; overflow-x:auto; }
+        max-width:560px; margin:28px auto 14px; text-align:left; overflow-x:auto; }
+.canvasbox { border:1px solid var(--line); border-radius:12px; background:var(--card);
+        padding:15px 18px; max-width:560px; margin:0 auto; text-align:left; }
+.chead { font-family:ui-monospace,'Cascadia Mono',Consolas,monospace; font-size:12px;
+        color:var(--mut); margin-bottom:9px; }
+.ctext { font-size:15.5px; line-height:1.75; min-height:84px; }
+.ctext .tent { color:var(--indigo); font-style:italic; }
+.ctext .mk { display:inline-block; width:.55em; height:.78em; background:#E2E5EE;
+        border-radius:2px; vertical-align:-.06em; margin-right:.3em; }
+.cfoot { border-top:1px solid var(--line); margin-top:10px; padding-top:8px;
+        font-family:ui-monospace,'Cascadia Mono',Consolas,monospace; font-size:12px;
+        color:var(--indigo); }
+.canvasnote { color:var(--mut); font-size:13px; margin:10px auto 0; max-width:560px; }
 .term .c { color:#8a8a8a; }
 .term div { white-space:nowrap; }
 h2.section { font-size:24px; margin:42px 0 6px; }
@@ -56,7 +69,9 @@ h2.section { font-size:24px; margin:42px 0 6px; }
 .badges { display:flex; flex-wrap:wrap; gap:6px; }
 .badge { font-size:12px; border:1px solid var(--line); border-radius:999px; padding:2px 9px;
          background:#fff; color:var(--mut); }
-.badge.ver { color:var(--accent); border-color:#e8cdbb; }
+.badge.ver { color:var(--ver); border-color:#CFE3CC; }
+.badge.cpu { color:var(--indigo); border-color:#D5D6F5; font-weight:600; }
+.sub a { color:var(--indigo); }
 .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin:18px 0; }
 .stat { border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
 .stat .k { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--mut); }
@@ -82,11 +97,11 @@ PAGE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
 <link rel="stylesheet" href="{root}style.css">
-<link rel="icon" href="{root}assets/logo-badge.png">
+<link rel="icon" type="image/svg+xml" href="{root}assets/logo.svg">
 </head>
 <body>
 <header><div class="wrap nav">
-  <a href="{root}index.html"><img src="{root}assets/logo-badge.png" alt="Ollada — home"></a>
+  <a href="{root}index.html" class="brand"><img src="{root}assets/logo.svg" alt="">ollada</a>
   <nav>
     <a href="{root}index.html#shelf">Library</a>
     <a href="https://github.com/OpenSourceRulesz/ollada">GitHub</a>
@@ -104,6 +119,9 @@ PAGE = """<!DOCTYPE html>
 </body>
 </html>
 """
+
+
+LOGO_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140"><polygon points="68.4,24.8 60.9,20.5 59.3,23.3 55.0,13.4 65.8,12.1 64.1,14.9 71.6,19.2" fill="#A8B0BE"/><polygon points="10.8,64.0 10.8,55.4 7.5,55.4 14.0,46.7 20.5,55.4 17.2,55.4 17.2,64.0" fill="#A8B0BE"/><polygon points="87.1,50.9 95.4,48.5 94.5,45.4 104.6,49.2 98.1,57.8 97.2,54.7 88.9,57.1" fill="#A8B0BE"/><polygon points="49.0,95.1 46.0,87.0 43.0,88.1 46.1,77.8 55.1,83.7 52.1,84.8 55.0,92.9" fill="#A8B0BE"/><polygon points="52.0,120.8 60.6,120.8 60.6,117.5 69.3,124.0 60.6,130.5 60.6,127.2 52.0,127.2" fill="#A8B0BE"/><circle cx="36" cy="32" r="10" fill="#6C6FD8"/><circle cx="92" cy="28" r="10" fill="#6C6FD8"/><circle cx="108" cy="72" r="10" fill="#6C6FD8"/><circle cx="66" cy="68" r="10" fill="#6C6FD8"/><circle cx="28" cy="96" r="10" fill="#6C6FD8"/><circle cx="84" cy="110" r="10" fill="#6C6FD8"/></svg>'
 
 
 def esc(x) -> str:
@@ -133,6 +151,9 @@ def gen_defaults(m: dict) -> list[tuple[str, str]]:
 
 def card(m: dict) -> str:
     v = m.get("verified", {})
+    ver_cls = "ver" if v.get("vram_gb") else "cpu"
+    cpu_badge = ('\n    <span class="badge cpu">CPU ✓</span>'
+                 if m["name"] == "sdar:4b" else "")
     return f"""
 <a class="card" href="models/{slug(m['name'])}.html">
   <h3>{esc(m['name'])}</h3>
@@ -141,9 +162,59 @@ def card(m: dict) -> str:
     <span class="badge">{esc(m.get('task', ''))}</span>
     <span class="badge">{esc(m.get('license', ''))}</span>
     <span class="badge">{esc(m.get('size_gb_bf16'))} GB</span>
-    <span class="badge ver">verified · {esc(f"{v['vram_gb']} GB VRAM" if v.get('vram_gb') else "CPU (no GPU)")} · {esc(v.get('tokens_per_sec'))} tok/s</span>
+    <span class="badge {ver_cls}">verified · {esc(f"{v['vram_gb']} GB VRAM" if v.get('vram_gb') else "CPU (no GPU)")} · {esc(v.get('tokens_per_sec'))} tok/s</span>{cpu_badge}
   </div>
 </a>"""
+
+
+CANVAS_PANEL = '''
+<div class="canvasbox">
+  <div class="chead"><span>sdar:1.7b · watch it write</span></div>
+  <div class="ctext" id="ctext"></div>
+  <div class="cfoot"><span id="cstat">block 1/3 · step 1/4</span></div>
+</div>
+<p class="canvasnote">An illustrative replay of the terminal's watch view — run <code>ollada run sdar:1.7b</code> and it's live.</p>
+<script>
+(function(){
+  var blocks = [
+    'The house on Alder Lane had stood for two hundred years, through wars, weddings, and winters that split its stones.',
+    'The storm arrived at midnight, patient at first, testing every shutter and leaning on the old chimney.',
+    'Then it stopped asking. The roof lifted like a held breath, let go at last, and two centuries ended in one loud minute.'
+  ];
+  var swaps = { storm: 'wind', roof: 'walls' };
+  var box = document.getElementById('ctext'), stat = document.getElementById('cstat');
+  var words = blocks.map(function(b){ return b.split(' '); });
+  function frame(bi, step){
+    var html = '';
+    for (var b = 0; b < words.length; b++){
+      for (var w = 0; w < words[b].length; w++){
+        var word = words[b][w];
+        if (b < bi) html += '<span>' + word + '</span> ';
+        else if (b > bi) html += '<span class="mk"></span> ';
+        else {
+          var shown = Math.floor(words[b].length * (step / 4));
+          if (w < shown){
+            var disp = word;
+            if (step < 4 && swaps[word] && w >= shown - 1) disp = swaps[word];
+            html += (step === 4 ? '<span>' + disp + '</span> ' : '<span class="tent">' + disp + '</span> ');
+          } else html += '<span class="mk"></span> ';
+        }
+      }
+    }
+    box.innerHTML = html;
+    stat.textContent = bi >= words.length ? 'done · drafted whole, refined block by block' : 'block ' + (bi + 1) + '/' + words.length + ' · step ' + Math.min(step + 1, 4) + '/4';
+  }
+  var bi = 0, step = 0; frame(0, 0);
+  setInterval(function(){
+    step++;
+    if (step > 4){ step = 1; bi++; }
+    if (bi >= words.length){ frame(words.length, 4); bi = -1; step = 0; return; }
+    if (bi < 0){ bi = 0; }
+    frame(bi, step);
+  }, 430);
+})();
+</script>
+'''
 
 
 def index_body(models: list[dict]) -> str:
@@ -161,6 +232,7 @@ def index_body(models: list[dict]) -> str:
     <div><span class="c">$</span> ollada run diffcoder:8b</div>
     <div><span class="c">$</span> ollada serve <span class="c"># local API on http://localhost:11435</span></div>
   </div>
+  <!--CANVAS-->
 </div>
 
 <h2 class="section" id="shelf">Library</h2>
@@ -176,7 +248,7 @@ undocumented defaults, and no promise that the recipe on the card actually runs.
 Ollada wraps each model family in a tested adapter, bakes the verified defaults
 (steps, block size, quantization) into a recipe, and serves it behind an
 Ollama-shaped API — so tools that already speak Ollama can point at port 11435.</p>
-"""
+""".replace("<!--CANVAS-->", CANVAS_PANEL)
 
 
 def model_body(m: dict) -> str:
@@ -308,7 +380,7 @@ def main() -> int:
     models.sort(key=lambda m: m["name"])
 
     (out / "style.css").write_text(CSS.strip() + "\n")
-    shutil.copy(ASSETS / "logo-badge.png", out / "assets" / "logo-badge.png")
+    (out / "assets" / "logo.svg").write_text(LOGO_SVG + "\n")
 
     (out / "index.html").write_text(PAGE.format(
         title="Ollada — the shelf for open-source diffusion language models",
