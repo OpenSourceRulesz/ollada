@@ -204,14 +204,22 @@ CANVAS_PANEL = '''
     box.innerHTML = html;
     stat.textContent = bi >= words.length ? 'done · drafted whole, refined block by block' : 'block ' + (bi + 1) + '/' + words.length + ' · step ' + Math.min(step + 1, 4) + '/4';
   }
-  var bi = 0, step = 0; frame(0, 0);
-  setInterval(function(){
+  var bi = 0, step = 0, timer = null; frame(0, 0);
+  function tick(){
     step++;
     if (step > 4){ step = 1; bi++; }
     if (bi >= words.length){ frame(words.length, 4); bi = -1; step = 0; return; }
     if (bi < 0){ bi = 0; }
     frame(bi, step);
-  }, 430);
+  }
+  function start(){ if (!timer) timer = setInterval(tick, 430); }
+  function stop(){ if (timer){ clearInterval(timer); timer = null; } }
+  var panel = document.querySelector('.canvasbox');
+  if ('IntersectionObserver' in window && panel){
+    new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ if (e.isIntersecting) start(); else stop(); });
+    }, { threshold: 0.35 }).observe(panel);
+  } else { start(); }
 })();
 </script>
 '''
