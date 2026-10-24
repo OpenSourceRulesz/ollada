@@ -88,6 +88,22 @@ footer { border-top:1px solid var(--line); margin-top:54px; padding:22px 0 34px;
 .modelhead { padding:36px 0 6px; }
 .modelhead h1 { font-family:ui-monospace,Consolas,monospace; font-size:34px; margin:0 0 6px; }
 .modelhead p { color:var(--mut); font-size:17px; margin:0; max-width:640px; }
+.navtoggle { display:none; }
+.navmenu { display:none; }
+@media (max-width:640px) {
+  .nav { flex-wrap:wrap; }
+  .nav nav { display:none; }
+  .navtoggle { display:flex; margin-left:auto; flex-direction:column; align-items:center;
+    justify-content:center; gap:5px; width:38px; height:38px; border:1px solid var(--line);
+    border-radius:9px; background:#fff; cursor:pointer; }
+  .navtoggle span { display:block; width:17px; height:2px; background:var(--ink); border-radius:2px; }
+  .navmenu.open { display:block; flex-basis:100%; }
+  .navmenu a { display:flex; justify-content:space-between; padding:13px 2px;
+    border-top:1px solid var(--line); text-decoration:none; color:var(--ink); font-size:16px; }
+  .navmenu a:hover { color:var(--indigo); }
+  .navmenu a span { color:#A8B0BE; }
+  .term { font-size:13px; padding:14px 16px; -webkit-overflow-scrolling:touch; }
+}
 """
 
 PAGE = """<!DOCTYPE html>
@@ -107,6 +123,12 @@ PAGE = """<!DOCTYPE html>
     <a href="https://github.com/OpenSourceRulesz/ollada">GitHub</a>
     <a href="https://pypi.org/project/ollada/">PyPI</a>
   </nav>
+  <button class="navtoggle" type="button" aria-expanded="false" aria-controls="navmenu" aria-label="Menu"><span></span><span></span></button>
+  <div class="navmenu" id="navmenu">
+    <a href="{root}index.html#shelf">Library <span aria-hidden="true">→</span></a>
+    <a href="https://github.com/OpenSourceRulesz/ollada">GitHub <span aria-hidden="true">→</span></a>
+    <a href="https://pypi.org/project/ollada/">PyPI <span aria-hidden="true">→</span></a>
+  </div>
 </div></header>
 <main class="wrap">
 {body}
@@ -116,9 +138,30 @@ PAGE = """<!DOCTYPE html>
   no telemetry, no hosted registry — models come from Hugging Face, recipes are verified here.
   Every number on this site was measured by a real-load run on the hardware named.
 </div></footer>
+{navscript}
 </body>
 </html>
 """
+
+
+NAV_SCRIPT = """<script>
+(function(){
+  var btn = document.querySelector('.navtoggle');
+  var menu = document.getElementById('navmenu');
+  if (!btn || !menu) return;
+  function close(){ menu.classList.remove('open'); btn.setAttribute('aria-expanded', 'false'); }
+  btn.addEventListener('click', function(e){
+    e.stopPropagation();
+    var open = menu.classList.toggle('open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  document.addEventListener('click', function(e){
+    if (!menu.contains(e.target) && e.target !== btn) close();
+  });
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape') close(); });
+  menu.addEventListener('click', function(e){ if (e.target.closest('a')) close(); });
+})();
+</script>"""
 
 
 LOGO_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140"><circle cx="26" cy="34" r="10" fill="#6C6FD8"/><circle cx="22" cy="76" r="10" fill="#6C6FD8"/><circle cx="38" cy="114" r="10" fill="#6C6FD8"/><circle cx="72" cy="74" r="10" fill="#6C6FD8"/><circle cx="108" cy="52" r="10" fill="#6C6FD8"/><circle cx="108" cy="96" r="10" fill="#6C6FD8"/></svg>'
@@ -392,12 +435,14 @@ def main() -> int:
 
     (out / "index.html").write_text(PAGE.format(
         title="Ollada — the shelf for open-source diffusion language models",
-        root="", body=index_body(models)))
+        root="", body=index_body(models), navscript=NAV_SCRIPT))
     (out / "library.html").write_text(PAGE.format(
-        title="Model catalog · Ollada", root="", body=library_body(models)))
+        title="Model catalog · Ollada", root="", body=library_body(models),
+        navscript=NAV_SCRIPT))
     for m in models:
         (out / "models" / f"{slug(m['name'])}.html").write_text(PAGE.format(
-            title=f"{m['name']} · Ollada", root="../", body=model_body(m)))
+            title=f"{m['name']} · Ollada", root="../", body=model_body(m),
+            navscript=NAV_SCRIPT))
     (ROOT / "docs" / "LIBRARY.md").write_text(library_md(models))
     print(f"built {out}: index + library + {len(models)} model pages "
           f"({', '.join(m['name'] for m in models)}); wrote docs/LIBRARY.md")
