@@ -58,8 +58,14 @@ def test_ensure_env_builds_with_gpu_index_on_gpu_machine(monkeypatch, tmp_path):
     assert python == venv_python("dream")
     assert calls[0][1:3] == ["-m", "venv"]
     pip_calls = [c for c in calls if "pip" in c]
-    assert len(pip_calls) == 1  # single install call when a GPU is present
-    assert "transformers>=4.53.3,<5" in pip_calls[0]
+    # GPU path splits like the CPU path: torch from PyTorch's CUDA
+    # index (plain PyPI torch is CPU-only), the rest from PyPI.
+    assert len(pip_calls) == 2
+    assert pip_calls[0][pip_calls[0].index("--index-url") + 1] == \
+        "https://download.pytorch.org/whl/cu128"
+    assert pip_calls[0][-1] == "torch"
+    assert "torch" not in pip_calls[1]
+    assert "transformers>=4.53.3,<5" in pip_calls[1]
 
 
 def test_ensure_env_splits_torch_to_cpu_index_without_gpu(monkeypatch, tmp_path):

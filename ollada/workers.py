@@ -44,6 +44,10 @@ from ollada import fit
 from ollada.recipes import Recipe, load_catalog, spec_satisfied
 
 CPU_TORCH_INDEX = "https://download.pytorch.org/whl/cpu"
+# PyPI's torch is CPU-only (2.14.1+cpu, no nvidia packages) — a GPU
+# machine that installs torch from PyPI silently lands CPU torch, as
+# the desktop dream env did. CUDA wheels live on PyTorch's index.
+CUDA_TORCH_INDEX = "https://download.pytorch.org/whl/cu128"
 
 
 class WorkerEnvError(RuntimeError):
@@ -230,8 +234,17 @@ def ensure_env(recipe: Recipe, _run=subprocess.run) -> Path:
             _run_checked([str(python), "-m", "pip", "install", *rest],
                          f"install worker packages for {family}", _run)
     else:
-        _run_checked([str(python), "-m", "pip", "install", *pkgs],
-                     f"install worker packages for {family}", _run)
+        # GPU machine: torch from PyTorch's CUDA index, everything
+        # else from PyPI — a single --index-url would move all
+        # packages, not just torch, and plain PyPI torch is CPU-only.
+        torch_pkgs = [p for p in pkgs if p == "torch"]
+        rest = [p for p in pkgs if p != "torch"]
+        _run_checked([str(python), "-m", "pip", "install",
+                      "--index-url", CUDA_TORCH_INDEX, *torch_pkgs],
+                     f"install torch (CUDA index) for {family}", _run)
+        if rest:
+            _run_checked([str(python), "-m", "pip", "install", *rest],
+                         f"install worker packages for {family}", _run)
     # Verify the installed torch matches the detected hardware. A
     # GPU machine whose torch reports no CUDA is a broken env, not a
     # slow one — fail loudly here instead of surfacing minutes later
