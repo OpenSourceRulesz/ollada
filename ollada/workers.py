@@ -213,7 +213,11 @@ def ensure_env(recipe: Recipe, _run=subprocess.run) -> Path:
         raise WorkerEnvError(
             f"could not create worker env for {family}: " + " | ".join(tail))
     pkgs = _pip_packages(recipe)
-    hardware = fit.detect_hardware()
+    # Fresh detection at build time: never inherit a stale cached
+    # result from an earlier call in this process — a transient
+    # detection failure would otherwise bake the wrong torch index
+    # into the env for every run after it.
+    hardware = fit.detect_hardware(refresh=True)
     if hardware.gpu_name is None:
         # No NVIDIA GPU: torch from the CPU index, everything else from
         # PyPI (a single --index-url would move all packages, not just torch).
@@ -228,6 +232,16 @@ def ensure_env(recipe: Recipe, _run=subprocess.run) -> Path:
     else:
         _run_checked([str(python), "-m", "pip", "install", *pkgs],
                      f"install worker packages for {family}", _run)
+    # Verify the installed torch matches the detected hardware. A
+    # GPU machine whose torch reports no CUDA is a broken env, not a
+    # slow one — fail loudly here instead of surfacing minutes later
+    # as CPU generation (the desktop dream env did exactly that).
+    if hardware.gpu_name is not None and not _worker_torch_has_cuda(python, _run):
+        raise WorkerEnvError(
+            f"worker env for {family} was built on a GPU machine "
+            f"({hardware.gpu_name}), but its torch reports no CUDA. "
+            f"The torch install did not pick up CUDA — rebuild it: "
+            f"ollada workers rebuild {recipe.name}")
     # Guard against incompatible family pins: pip resolved the requested
     # model's pin, but a sibling model may need a disjoint range. Fail
     # loudly at build time rather than thrashing between rebuilds.
@@ -247,7 +261,29 @@ def ensure_env(recipe: Recipe, _run=subprocess.run) -> Path:
 def rebuild_env(recipe: Recipe, _run=subprocess.run) -> Path:
     """Delete a family's worker env and rebuild it from the recipe."""
     shutil.rmtree(venv_path(recipe.family), ignore_errors=True)
+    if venv_python(recipe.family).exists():
+        # Windows file locking (or a still-running worker) can leave
+        # the env behind while ignore_errors hides it; proceeding
+        # would make ensure_env return the old env untouched while
+        # this command reports success — the desktop dream rebuild
+        # did exactly that, keeping its CPU torch.
+        raise WorkerEnvError(
+            f"worker env for {recipe.family} could not be deleted — "
+            f"it is probably still in use. Stop any running ollada "
+            f"process and rebuild again: "
+            f"ollada workers rebuild {recipe.name}")
     return ensure_env(recipe, _run)
+
+
+def _worker_torch_has_cuda(python, _run) -> bool:
+    """True only if the worker env's torch affirmatively reports CUDA."""
+    try:
+        proc = _run([str(python), "-c",
+                     "import torch; print(torch.cuda.is_available())"],
+                    capture_output=True, text=True)
+    except Exception:
+        return False
+    return proc.returncode == 0 and proc.stdout.strip() == "True"
 
 
 def list_envs(recipes: list[Recipe]) -> list[dict]:

@@ -27,7 +27,9 @@ from ollada.workers import (
 def _ok_run(calls):
     def run(argv, **kwargs):
         calls.append(argv)
-        return SimpleNamespace(returncode=0, stdout="", stderr="")
+        stdout = "True" if any(
+            "torch.cuda.is_available()" in str(a) for a in argv) else ""
+        return SimpleNamespace(returncode=0, stdout=stdout, stderr="")
     return run
 
 
@@ -125,6 +127,22 @@ def test_ensure_env_matching_pin_returns_existing_python(monkeypatch, tmp_path):
     assert ensure_env(get_recipe("dream:7b")) == venv_python("dream")
 
 
+def test_ensure_env_gpu_build_refuses_when_installed_torch_has_no_cuda(monkeypatch, tmp_path):
+    # The desktop dream env: built on a GPU machine, but its torch
+    # reported no CUDA — that must fail loudly at build time, not
+    # surface minutes later as CPU generation.
+    monkeypatch.setenv("OLLADA_WORKERS_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        fit, "detect_hardware",
+        lambda refresh=False: fit.Hardware(gpu_name="Test GPU", vram_total_gb=16.0))
+
+    def _no_cuda_run(argv, **kwargs):
+        return SimpleNamespace(returncode=0, stdout="False", stderr="")
+
+    with pytest.raises(WorkerEnvError, match="no CUDA"):
+        ensure_env(get_recipe("dream:7b"), _run=_no_cuda_run)
+
+
 def test_rebuild_deletes_then_builds(monkeypatch, tmp_path):
     monkeypatch.setenv("OLLADA_WORKERS_DIR", str(tmp_path))
     marker = venv_path("dream") / "marker.txt"
@@ -137,6 +155,25 @@ def test_rebuild_deletes_then_builds(monkeypatch, tmp_path):
     rebuild_env(get_recipe("dream:7b"), _run=_ok_run(calls))
     assert not marker.exists()
     assert any("venv" in c for c in calls)
+
+
+def test_rebuild_refuses_when_env_survives_deletion(monkeypatch, tmp_path):
+    # Windows file locking can leave the env behind while rmtree's
+    # ignore_errors hides it; proceeding would return the old env
+    # untouched while reporting success.
+    import shutil
+
+    monkeypatch.setenv("OLLADA_WORKERS_DIR", str(tmp_path))
+    family_dir = venv_path("dream")
+    if sys.platform == "win32":
+        (family_dir / "Scripts").mkdir(parents=True)
+        (family_dir / "Scripts" / "python.exe").touch()
+    else:
+        (family_dir / "bin").mkdir(parents=True)
+        (family_dir / "bin" / "python").touch()
+    monkeypatch.setattr(shutil, "rmtree", lambda *a, **k: None)
+    with pytest.raises(WorkerEnvError, match="still in use"):
+        rebuild_env(get_recipe("dream:7b"), _run=_ok_run([]))
 
 
 def test_list_envs_reports_built_and_version(monkeypatch, tmp_path):
