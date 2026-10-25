@@ -1,16 +1,15 @@
 # Findings — field notes from putting diffusion LLMs on a shelf
 
 **Status: early.** Everything below comes from Ollada's own real-load runs
-through Ollada's own code on a Colab **Tesla T4** (2026-10-21), plus a
-literature pass the same week. Desktop re-verification on an
-**RTX 5060 Ti 16GB** — the machine this shelf is actually aimed at — is
-still pending and is a pre-launch gate. A CPU addendum (§7,
-2026-10-23) follows the T4 work — SDAR measured running on a laptop
-CPU — and changes nothing about that gate. Treat the T4 numbers as a
-conservative floor, not the final word: speeds will change on newer
-hardware, and one fit question (DiffCoder, §6) only the desktop can
-answer. Where a number is a vendor's, it is labelled a vendor's. Vendor
-benchmarks are never presented as our measurements.
+through Ollada's own code: a Colab **Tesla T4** (2026-10-21, §1–§6), a
+laptop CPU addendum (§7, 2026-10-23), and a desktop re-verification on
+an **RTX 5060 Ti 16GB** (§8, 2026-10-25) — the machine this shelf is
+actually aimed at. The desktop verification gate that §1–§6 left open
+is now closed; the T4 numbers remain as the historic floor, and §8 is
+where the target-card numbers live. (Launch/announcement is a separate
+decision and is not claimed here.) Where a number is a vendor's, it is
+labelled a vendor's. Vendor benchmarks are never presented as our
+measurements.
 
 ## 1. The shelf, measured
 
@@ -196,3 +195,86 @@ words, current guesses, untouched masks).
   joins the catalog on the strength of this run, its recipe
   labelled CPU-verified; the 5060 Ti re-verification in the status
   header is unchanged and still pending.
+
+## 8. Addendum (2026-10-25): desktop GPU verification — RTX 5060 Ti 16GB
+
+The pre-launch gate from §1 is closed. All three GPU models were run
+through Ollada's own code on a desktop card (RTX 5060 Ti, 15.9 GB VRAM
+by `nvidia-smi`, 31.6 GB host RAM, Windows 11, display attached). The
+morning pass ran the fixed prompt set from a main-venv install; the
+evening pass ran variant prompts through per-family isolated worker
+environments (transformers 4.57.6 for dream/sdar, 5.3.0 for diffcoder;
+torch 2.11.0+cu128). Fixed set, verbatim: train "45 km in 30 minutes"
+(expect 90 km/h), capital "exactly one word" (expect Paris), fib "only
+output code". Evening variants: train "60 km in 45 minutes" (expect
+80), capital "one word" (no "exactly"), fib "with a docstring".
+
+| Model | Desktop peak | T4 peak | Fit on the 15.9 GB card |
+|---|---|---|---|
+| `dream:7b` | 9.13 GB | 9.80 GB | fits (~10.1 GB with headroom) |
+| `sdar:4b` | 8.34 GB | 8.87 GB | fits (~9.3 GB with headroom) |
+| `diffcoder:8b` | 13.65 GB | 15.15 GB | fits, but tight (~14.7 GB with headroom, ~1.2 GB spare) |
+
+- **Dream is the noisy one.** Morning fixed set, all correct: train
+  90 km/h (33.4s), capital exactly "Paris" (30.6s), Fibonacci clean and
+  recursive (30.6s). But the wider desktop run set caught failures on
+  the same fixed set at the same 128-step default: train wrong twice
+  (3 km/h, no minutes-to-hours conversion) and a syntactically broken
+  Fibonacci (elif line missing colon and body). Dream samples at
+  temperature 0.2, so this reads as sampling noise, not a deterministic
+  break — and it matches the T4 sweep (§2), where 128 steps was clean
+  but 256 answered the train problem wrong. Conclusion: noisy, not
+  deterministically broken — but the variable one of the three, where
+  SDAR and DiffCoder were steady on the fixed set. Dream takes ~30s
+  per answer at the recipe defaults because it denoises the full
+  256-token canvas in 128 steps every time, even for "Paris" — that is
+  the default's price, not a bug, and it is faster than the T4's ~38s
+  for the same canvas.
+- **SDAR is steady.** Fixed set: Fibonacci recursive and correct
+  (3.8s). Variant prompts, all correct: 60/45 train → 80 km/h (27.0s),
+  fib with docstring correct twice (30.3s, 44.2s), one-word capital
+  exactly "Paris" (13.0s after the worker build). Peak 8.34 GB is
+  stable across 15 observations. The §6 fit question is answered for
+  SDAR: comfortably fits the target card.
+- **DiffCoder is steady on the fixed set, wobbly on variants.**
+  Fixed set: train 90 km/h with clean working (240.2s first answer
+  including first-run warmup, 26.0s on the identical repeat), capital
+  exactly "Paris" (0.7s, early stop), Fibonacci iterative and correct
+  (12.3s). Variants: the 60/45 train problem came out WRONG (40 km/h
+  via 45/60 = 3/2 hours — it is 3/4; Dream and SDAR got 80 on the same
+  prompt); the docstring fib came out correct but cut off mid-code
+  (the known 256-canvas limit, §2); "one word" without "exactly"
+  produced a verbose Paris-plus-explanation instead of the bare word.
+  The fixed set stays steady; variants wobble — prompt sensitivity,
+  not a broken model.
+- **Correction to an earlier stamp.** The first desktop stamp
+  (5 observations) put DiffCoder at 9.17 GB and called the T4 tight-fit
+  worry resolved. Later runs measured higher: the peak over 13
+  observations is 13.65 GB, so the tight-fit story stands, corrected
+  (~1.2 GB spare on a display-driving card, not ~5.7). Peak is a
+  maximum — the latest max stands. The recipe and the site now carry
+  13.65 GB.
+- **The API path works on the desktop.** `ollada serve` on
+  127.0.0.1:11435; POST /api/chat with `sdar:4b` answered "Paris",
+  done=True, eval_count 256, eval_duration 1.917s (early stop on a
+  one-word answer, same behavior as the T4's 1.2s precedent).
+- **Two install findings from the pass itself.** A fresh `[gpu]`
+  install lands transformers 5.x, which breaks Dream's vendored
+  modeling with `KeyError: 'default'` (its RoPE config predates the
+  5.x rework) — 4.57.6 restores it and keeps SDAR working. And torch
+  2.14.1 from plain PyPI was CUDA-blind on this card
+  (`torch.cuda.is_available()` False, generation falling back to CPU)
+  — 2.11.0+cu128 from the PyTorch CUDA index fixed it. Both are now
+  encoded in the per-family worker environments; a bare `[gpu]`
+  reinstall would re-break Dream and is not a supported path on this
+  card. The worker environments are the 0.3.0 line and are not merged
+  to main as of this writing; the numbers above were produced through
+  them, and the recipes record the envs that actually ran.
+
+What the desktop changes: DiffCoder's §6 fit question is answered
+(tight but fits — close other GPU apps first on a display-driving
+card); Dream's speed story stays "about 30 seconds at defaults" with
+the noise caveat attached; SDAR's desktop numbers confirm its T4
+numbers transfer. What it does not change: the CPU story (§7) stands
+as written, and the pending SDPA experiment (laptop, §7's speed
+baseline) is still unrun.
