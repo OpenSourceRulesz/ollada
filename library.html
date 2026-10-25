@@ -33,13 +33,15 @@
 <div class="tablewrap">
 <table>
 <tr><td class="k">Model</td><td class="k">Task</td><td class="k">Weights (bf16)</td>
-    <td class="k">Peak VRAM, measured</td><td class="k">Speed, canvas tok/s</td>
+    <td class="k">Peak VRAM, T4</td><td class="k">Peak VRAM, RTX 5060 Ti</td>
+    <td class="k">Speed, canvas tok/s</td>
     <td class="k">Default quant</td><td class="k">Verified</td><td class="k">License</td></tr>
 <tr>
   <td><a href="models/diffcoder-8b.html"><code>diffcoder:8b</code></a></td>
   <td>coding</td>
   <td>16.0 GB</td>
   <td>15.15 GB</td>
+  <td>9.17 GB</td>
   <td>4.1</td>
   <td>int8</td>
   <td>2026-10-21</td>
@@ -49,6 +51,7 @@
   <td>chat</td>
   <td>15.2 GB</td>
   <td>9.8 GB</td>
+  <td>9.13 GB</td>
   <td>6.7</td>
   <td>int8</td>
   <td>2026-10-21</td>
@@ -58,6 +61,7 @@
   <td>chat</td>
   <td>4.1 GB</td>
   <td>— (CPU)</td>
+  <td>—</td>
   <td>6.1</td>
   <td>bf16</td>
   <td>2026-10-23</td>
@@ -67,6 +71,7 @@
   <td>chat</td>
   <td>8.8 GB</td>
   <td>8.87 GB</td>
+  <td>8.34 GB</td>
   <td>12.3</td>
   <td>bf16</td>
   <td>2026-10-21</td>
@@ -77,8 +82,9 @@
 <p class="sub">VRAM and speed were measured through Ollada's own code on the hardware
 named on each model's page (GPU shelf: Colab Tesla T4, 2026-10-21; sdar:1.7b: a
 laptop CPU, 2026-10-23 — single-run samples, treated as measured floors, not
-laws). Desktop verification on the RTX 5060 Ti is the pre-launch re-check.
-Weights come from Hugging Face — Ollada hosts no registry.</p>
+laws). The three GPU models were re-verified on a desktop RTX 5060 Ti on
+2026-10-25; those peaks are the second VRAM column and the desktop notes on
+each model's page. Weights come from Hugging Face — Ollada hosts no registry.</p>
 <h2 class="section">Pull them</h2>
 <div class="term" style="margin:20px 0;">
     <div><span class="c">$</span> ollada pull diffcoder:8b</div>

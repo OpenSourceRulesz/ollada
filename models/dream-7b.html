@@ -40,7 +40,8 @@
 </div>
 <p class="sub">Verified 2026-10-21 through Ollada's own code. Load time
 includes the first weight download where noted in the verification notes —
-cached loads are faster. Desktop verification (RTX 5060 Ti) is the pre-launch re-check; T4 numbers are the conservative floor.</p>
+cached loads are faster. Desktop re-verification on the RTX 5060 Ti is below; T4 numbers remain the conservative floor.</p>
+<p class="sub">Desktop re-verification: Desktop — NVIDIA GeForce RTX 5060 Ti (15.9 GB), Windows 11 (2026-10-25) — peak VRAM 9.13 GB. Same fixed prompt set at recipe defaults, run under transformers 4.57.6 (the recipe pin below was widened to allow it — see env). Train-speed reasoning WRONG twice (3 km/h both times: 45/30 with no minutes-to-hours conversion); one-word capital probe exactly &#x27;Paris&#x27;; Fibonacci syntactically broken (elif line missing colon and body). Read with the T4 sweep: at the same 128-step default T4 got Fibonacci clean and math&#x27;s final answer right, so dream is NOISY on this prompt set, not deterministically broken — but it is the variable one of the three, where sdar:4b and diffcoder:8b were steady. Fits with ~5.8 GB to spare (needs ~10.1 GB with headroom).</p>
 <h2 class="section">Recipe defaults</h2>
 <table><tr><td class="k">Denoising steps</td><td>128</td></tr>
 <tr><td class="k">Canvas length (tokens)</td><td>256</td></tr>
