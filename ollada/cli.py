@@ -340,13 +340,17 @@ def _cmd_run(args) -> int:
     def _overrides() -> dict | None:
         return {"gen_length": session_length} if session_length else None
 
-    # Watch mode is simply what a terminal run looks like: when
-    # stderr is a real terminal and the adapter can report its
-    # canvas, the canvas replaces the spinner (the manager forwards
-    # the callback only to adapters that support it). OLLADA_NO_WATCH
-    # in the environment turns it off; piped output never sees it.
+    # Watch mode is opt-in (OLLADA_WATCH=1). The live canvas is a nice
+    # effect, but its in-place ANSI redraw proved unreliable in VS
+    # Code's terminal: frames survived below the prompt after the run
+    # ended, and two redraw fixes (shrink-clear, stream-measured width)
+    # did not change the symptom — the foreground byte stream replays
+    # clean in a terminal emulator, so the residue comes from outside
+    # the run (a stale process on the terminal, or the terminal
+    # replaying buffered frames late). Default runs stay clean
+    # (spinner + answer); OLLADA_NO_WATCH still forces it off.
     watch = None
-    if "OLLADA_NO_WATCH" not in os.environ:
+    if "OLLADA_WATCH" in os.environ and "OLLADA_NO_WATCH" not in os.environ:
         try:
             if sys.stderr.isatty():
                 watch = _CanvasWatch()
