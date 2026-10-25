@@ -11,12 +11,12 @@ Ollama is where people go to get open-source autoregressive models: clean names,
 **Ollada** is building the equivalent for diffusion:
 
 ```bash
-pip install "ollada[cpu]"   # laptop, no GPU needed
+pip install ollada
 ollada pull sdar:1.7b
 ollada run sdar:1.7b
 ```
 
-On a GPU machine, `pip install "ollada[gpu]"` instead (adds bitsandbytes and einops for the GPU shelf), then `ollada pull diffcoder:8b` / `ollada run diffcoder:8b`. `ollada serve` needs `pip install "ollada[server]"` — the local API on http://localhost:11435. Bare `pip install ollada` gives you only the shelf commands (`list` / `show` / `recommend`); it can't load a model. Quotes around the brackets are for PowerShell; on bash/zsh they're optional. CPU-only machine? Install torch from the CPU index first — `pip install torch --index-url https://download.pytorch.org/whl/cpu` — and pip will reuse it instead of downloading the ~2GB CUDA bundle.
+Models run in per-family worker environments, built on first load of a family (one venv per family, pinned from the recipe, under `~/.ollada/workers/` — `ollada workers` lists them, `ollada workers rebuild <model>` rebuilds one). That's how dream's transformers 4.x and diffcoder's 5.3.0 coexist, and why a base install runs models without the `[gpu]` extra: the first load of a family downloads torch, so it's slow once. `ollada serve` needs `pip install "ollada[server]"` — the local API on http://localhost:11435. The `[gpu]` / `[cpu]` extras still exist for direct use (probes, notebooks) but are no longer the run path. Quotes around the brackets are for PowerShell; on bash/zsh they're optional. On a machine with no NVIDIA GPU, the worker env pulls torch from the CPU index automatically instead of the ~2GB CUDA bundle.
 
 - **Curated library, short names** — `dream:7b`, `sdar:4b`, `diffcoder:8b`, `sdar:1.7b`. A model is on the shelf only after a real-load verification run through Ollada's own code on named hardware — a real GPU for the flagship shelf; `sdar:1.7b` is the first CPU-verified entry (an ordinary laptop, no GPU).
 - **Verified recipes, not homework** — the steps / block size / threshold / quantization that actually work are baked into each model's recipe, tested and published with the hardware they were measured on.
@@ -26,7 +26,7 @@ On a GPU machine, `pip install "ollada[gpu]"` instead (adds bitsandbytes and ein
 
 ## Status
 
-**In development (Phase 1).** The runtime core is built: recipe catalog, family adapters (Dream / SDAR / DiffCoder; Nemotron dormant), a one-model-at-a-time manager, Ollama-shaped + OpenAI-shaped APIs, and the `list / show / pull / run / serve / ps` CLI.
+**In development (Phase 1).** The runtime core is built: recipe catalog, family adapters (Dream / SDAR / DiffCoder; Nemotron dormant), a one-model-at-a-time manager with per-family isolated worker environments, Ollama-shaped + OpenAI-shaped APIs, and the `list / show / pull / run / serve / ps / workers` CLI.
 
 **Verified shelf (real-load runs, our numbers — see [PLAN.md](PLAN.md) §7):**
 - ✅ `dream:7b` — Tesla T4 (Colab), 2026-10-21: peak VRAM 9.80GB, ~6.7 canvas tok/s at the swept recipe defaults (steps=128; the original 32-step default was faster but garbled code output). Quality notes live in its recipe.

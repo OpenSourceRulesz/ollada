@@ -1,7 +1,8 @@
-"""ollada CLI — list / show / pull / run / serve / ps / rm / recommend.
+"""ollada CLI — list / show / pull / run / serve / ps / rm / recommend / workers.
 
-The base install is dependency-light (pyyaml only). GPU work needs
-`pip install "ollada[gpu]"`; serving needs `pip install "ollada[server]"`.
+The base install is dependency-light (pyyaml + huggingface-hub). Models run
+in per-family worker venvs built on first load, so a base install can run
+models without the [gpu] extra; serving needs `pip install "ollada[server]"`.
 Commands that need a missing extra say so instead of crashing.
 """
 
@@ -16,8 +17,7 @@ import time
 
 from ollada import __version__, fit, measurements
 from ollada.recipes import RecipeError, get_recipe, load_catalog
-
-GPU_HINT = 'this command needs the GPU stack: pip install "ollada[gpu]"'
+from ollada.workers import WorkerEnvError
 
 
 def _parse_length_command(text: str) -> int | None:
@@ -274,7 +274,9 @@ def _cmd_pull(args) -> int:
     try:
         from huggingface_hub import snapshot_download
     except ImportError:
-        print(GPU_HINT, file=sys.stderr)
+        # huggingface-hub is a base dependency, so this fires only on a
+        # broken install — not on a missing [gpu] extra (pull needs no torch).
+        print('pulling needs huggingface-hub: pip install huggingface-hub', file=sys.stderr)
         return 2
     print(f"pulling {r.name} from {r.source} ...")
     path = snapshot_download(repo_id=r.source)
@@ -283,11 +285,9 @@ def _cmd_pull(args) -> int:
 
 
 def _cmd_run(args) -> int:
-    try:
-        import torch  # noqa: F401
-    except ImportError:
-        print(GPU_HINT, file=sys.stderr)
-        return 2
+    # No torch gate here: the model runs in its worker venv, which owns
+    # torch. A base install (pyyaml only) runs models fine once the
+    # worker env is built; a failed build reports itself clearly.
     from ollada.runtime.manager import ModelManager
 
     if args.length is not None and args.length < 1:
@@ -384,6 +384,26 @@ def _cmd_recommend(_args) -> int:
     return 0
 
 
+def _cmd_workers(args) -> int:
+    from ollada.recipes import load_catalog
+    from ollada.workers import list_envs, rebuild_env
+
+    if args.workers_command == "rebuild":
+        from ollada.recipes import get_recipe
+
+        recipe = get_recipe(args.name)
+        rebuild_env(recipe)
+        print(f"rebuilt worker env for {recipe.family}")
+        return 0
+    rows = list_envs(load_catalog())
+    print(f"{'FAMILY':<12} {'BUILT':<8} {'TRANSFORMERS':<14} PATH")
+    for row in rows:
+        print(f"{row['family']:<12} "
+              f"{'yes' if row['built'] else 'no':<8} "
+              f"{row['transformers'] or '—':<14} {row['path']}")
+    return 0
+
+
 def _cmd_serve(args) -> int:
     try:
         import fastapi  # noqa: F401
@@ -417,7 +437,8 @@ def _cmd_rm(args) -> int:
     try:
         from huggingface_hub import scan_cache_dir
     except ImportError:
-        print(GPU_HINT, file=sys.stderr)
+        # huggingface-hub is a base dependency; see _cmd_pull.
+        print('this needs huggingface-hub: pip install huggingface-hub', file=sys.stderr)
         return 2
     found = False
     for repo in list(scan_cache_dir().repos):
@@ -475,6 +496,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("name")
     p.set_defaults(fn=_cmd_rm)
 
+    p = sub.add_parser("workers", help="inspect or rebuild per-family worker envs")
+    wsub = p.add_subparsers(dest="workers_command")
+    wsub.add_parser("list", help="show worker envs and their transformers versions")
+    pr = wsub.add_parser("rebuild", help="delete and rebuild one family's worker env")
+    pr.add_argument("name", help="a model name, e.g. dream:7b")
+    p.set_defaults(fn=_cmd_workers)
+
     return parser
 
 
@@ -491,6 +519,9 @@ def main(argv=None) -> int:
         return 2
     except fit.FitError as exc:
         print(f"fit check: {exc}", file=sys.stderr)
+        return 2
+    except WorkerEnvError as exc:
+        print(f"error: {exc}", file=sys.stderr)
         return 2
 
 

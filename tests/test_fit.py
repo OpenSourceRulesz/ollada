@@ -130,6 +130,10 @@ def tiny_gpu(monkeypatch):
 def test_manager_refuses_before_creating_adapter(monkeypatch, tiny_gpu):
     import ollada.runtime.manager as manager_mod
 
+    # This test proves the refusal order (fit gate before any adapter
+    # exists) through the in-process path; the worker path has its own
+    # refusal test in test_manager_worker.py.
+    monkeypatch.setenv("OLLADA_INPROCESS", "1")
     created = []
     monkeypatch.setattr(manager_mod, "create_adapter", lambda r: created.append(r) or FakeAdapter(r))
     manager = manager_mod.ModelManager()
@@ -147,6 +151,9 @@ def test_api_maps_fit_refusal_to_409_and_force_overrides(monkeypatch, tiny_gpu):
     import ollada.runtime.manager as manager_mod
     from ollada.adapters.base import GenResult
     from ollada.server import create_app
+
+    # In-process path: this test maps the refusal, it does not test workers.
+    monkeypatch.setenv("OLLADA_INPROCESS", "1")
 
     class Chatty(FakeAdapter):
         def chat(self, messages, overrides=None):

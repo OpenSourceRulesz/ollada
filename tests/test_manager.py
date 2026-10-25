@@ -7,6 +7,7 @@ the other families' adapters, whose chat() predates watch mode.
 
 from types import SimpleNamespace
 
+from ollada.adapters.base import GenResult
 from ollada.runtime.manager import ModelManager
 
 
@@ -19,7 +20,7 @@ class _PlainAdapter:
 
     def chat(self, messages, overrides=None):
         self.calls.append((messages, overrides))
-        return "ok"
+        return GenResult(text="ok", tokens=0, seconds=0.0)
 
 
 class _WatchAdapter:
@@ -31,7 +32,7 @@ class _WatchAdapter:
 
     def chat(self, messages, overrides=None, on_step=None):
         self.calls.append((messages, overrides, on_step))
-        return "ok"
+        return GenResult(text="ok", tokens=0, seconds=0.0)
 
 
 def _manager_with(adapter):
@@ -44,7 +45,7 @@ def test_step_callback_not_forwarded_to_plain_adapters():
     adapter = _PlainAdapter()
     manager = _manager_with(adapter)
     result = manager.chat("fake:1", [{"role": "user", "content": "hi"}], on_step=object())
-    assert result == "ok"
+    assert result.text == "ok"
     # Called with the pre-watch shape exactly: two positional args.
     assert adapter.calls == [([{"role": "user", "content": "hi"}], None)]
 
@@ -54,7 +55,7 @@ def test_step_callback_forwarded_to_watch_adapters():
     manager = _manager_with(adapter)
     marker = object()
     result = manager.chat("fake:2", [{"role": "user", "content": "hi"}], on_step=marker)
-    assert result == "ok"
+    assert result.text == "ok"
     assert adapter.calls[0][2] is marker
 
 

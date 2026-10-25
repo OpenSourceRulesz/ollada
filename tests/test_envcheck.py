@@ -46,6 +46,9 @@ def test_manager_refuses_on_pin_mismatch_before_creating_adapter(monkeypatch):
     from ollada import fit
     from ollada.recipes import get_recipe
 
+    # The pin check this test proves lives on the in-process path now;
+    # the worker path checks the venv's pin instead (test_workers.py).
+    monkeypatch.setenv("OLLADA_INPROCESS", "1")
     created = []
     monkeypatch.setattr(
         manager_mod, "create_adapter", lambda r: created.append(r) or _FakeAdapter(r)

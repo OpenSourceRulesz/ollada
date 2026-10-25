@@ -35,6 +35,10 @@ def client(monkeypatch):
     import ollada.runtime.manager as manager_mod
     from ollada import fit
 
+    # These tests prove the HTTP contract with a fake adapter; run them
+    # through the in-process escape hatch, not the worker path (which
+    # needs real venvs). Worker behavior has its own tests.
+    monkeypatch.setenv("OLLADA_INPROCESS", "1")
     monkeypatch.setattr(manager_mod, "create_adapter", lambda recipe: FakeAdapter(recipe))
     # Shape tests run on whatever machine pytest runs on; pin fit detection
     # to a capable machine so they test HTTP shape, not the fit gate (the
