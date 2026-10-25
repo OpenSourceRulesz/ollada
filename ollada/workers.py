@@ -2,18 +2,29 @@
 
 Why a venv per family instead of one shared env: the families' pins are
 incompatible (dream needs transformers 4.x, diffcoder needs 5.3.0, sdar
-needs >=4.57), so no single install satisfies the shelf. A worker venv
+needs >=4.57,<5), so no single install satisfies the shelf. A worker venv
 holds exactly one family's stack; the manager spawns the venv's python
 with PYTHONPATH pointed at the manager's ollada package, so the worker
 code itself always matches the manager's version and is never installed
 twice.
+
+One env per family does NOT mean one model's recipe: the install set is
+the UNION of the family's recipes' extras. The sdar family proved why —
+1.7b's modeling never imports einops, 4b's does, and an env built from
+the 1.7b recipe alone (the first run) left the 4b unloadable with a bare
+ImportError (found on the Dell, 2026-10-25). The transformers pin stays
+per requested model, and a fresh build verifies the installed version
+satisfies EVERY family recipe's pin, so incompatible family pins fail
+loudly at build time instead of thrashing between rebuilds.
 
 Layout: ~/.ollada/workers/<family>/ (OLLADA_WORKERS_DIR overrides, same
 pattern as OLLADA_MEASUREMENTS_DIR). Envs are built lazily on first load
 of a family — the first load downloads torch, so it is slow once and
 says so. A pin mismatch in an existing env is a refusal, not a silent
 rebuild: rebuilding re-downloads gigabytes, so it happens only on an
-explicit `ollada workers rebuild <model>`.
+explicit `ollada workers rebuild <model>`. A missing package in an
+existing env (built before the union rule, or by hand) refuses the same
+way, with the same rebuild pointer.
 
 Torch index: on a machine with no NVIDIA GPU (nvidia-smi absent), torch
 comes from the CPU index instead of the ~2GB CUDA bundle — the same tip
@@ -30,7 +41,7 @@ import sys
 from pathlib import Path
 
 from ollada import fit
-from ollada.recipes import Recipe, spec_satisfied
+from ollada.recipes import Recipe, load_catalog, spec_satisfied
 
 CPU_TORCH_INDEX = "https://download.pytorch.org/whl/cpu"
 
@@ -79,16 +90,62 @@ def installed_transformers(python: Path) -> str | None:
     return version or None
 
 
+def _norm_dist_name(name: str) -> str:
+    return name.lower().replace("-", "_")
+
+
+def installed_distributions(python: Path) -> set[str] | None:
+    """Installed distribution names in a venv, normalized, or None.
+
+    One importlib.metadata scan, no imports of the packages themselves
+    (importing torch just to ask if it is installed is slow and can fail
+    for unrelated reasons). None means the venv python is missing/broken.
+    """
+    if not Path(python).exists():
+        return None
+    try:
+        proc = subprocess.run(
+            [str(python), "-c",
+             "import importlib.metadata as m; "
+             "print('\\n'.join(d.metadata['Name'] for d in m.distributions()))"],
+            capture_output=True, text=True, timeout=60,
+        )
+    except Exception:
+        return None
+    if proc.returncode != 0:
+        return None
+    return {_norm_dist_name(line) for line in proc.stdout.splitlines() if line.strip()}
+
+
+def _family_recipes(family: str) -> list[Recipe]:
+    try:
+        return [r for r in load_catalog() if r.family == family]
+    except Exception:
+        return []
+
+
+def _family_extras(family: str) -> list[str]:
+    """Union of extras across the family's recipes, in first-seen order."""
+    out: list[str] = []
+    for recipe in _family_recipes(family):
+        for extra in (recipe.env or {}).get("extras", []) or []:
+            if extra not in out:
+                out.append(extra)
+    return out
+
+
 def _pip_packages(recipe: Recipe) -> list[str]:
     """Install set for a family's worker env, order-deduped.
 
-    pyyaml (the worker imports ollada.recipes), torch, the recipe's
-    transformers pin, accelerate, then the recipe's extras. Extras may
-    repeat torch/accelerate — dedupe keeps the first occurrence.
+    pyyaml (the worker imports ollada.recipes), torch, the requested
+    model's transformers pin, accelerate, then the UNION of the family's
+    extras (see the module docstring: per-model extras break the
+    second model of a family). Extras may repeat torch/accelerate —
+    dedupe keeps the first occurrence.
     """
     spec = (recipe.env or {}).get("transformers", "")
     pkgs = ["pyyaml", "torch", f"transformers{spec}", "accelerate"]
-    pkgs.extend((recipe.env or {}).get("extras", []) or [])
+    pkgs.extend(_family_extras(recipe.family))
     seen: set[str] = set()
     out: list[str] = []
     for pkg in pkgs:
@@ -113,9 +170,10 @@ def _run_checked(argv: list[str], what: str, _run=subprocess.run) -> None:
 def ensure_env(recipe: Recipe, _run=subprocess.run) -> Path:
     """Return the venv python for a family's worker env, building if needed.
 
-    Raises WorkerEnvError on a build failure or a pin mismatch in an
-    existing env (rebuild explicitly; see rebuild_env). _run is a test
-    seam for the subprocess calls.
+    Raises WorkerEnvError on a build failure, a pin mismatch in an
+    existing env, or a missing package in an existing env (rebuild
+    explicitly; see rebuild_env). _run is a test seam for the
+    subprocess calls.
     """
     family = recipe.family
     python = venv_python(family)
@@ -128,6 +186,19 @@ def ensure_env(recipe: Recipe, _run=subprocess.run) -> Path:
                     f"worker env for {family} has transformers {installed}, "
                     f"but {recipe.name} pins transformers{spec}. Rebuild it: "
                     f"ollada workers rebuild {recipe.name}")
+        # An env built before the union rule (or by hand) can pass the
+        # pin check while missing a package another family model needs
+        # — the Dell sdar env had transformers but no einops. Refuse
+        # with the same rebuild pointer instead of a bare ImportError.
+        dists = installed_distributions(python)
+        if dists is not None:
+            needed = {_norm_dist_name(p.split("[")[0].split("=")[0].split(">")[0].split("<")[0])
+                      for p in _pip_packages(recipe)}
+            missing = sorted(n for n in needed if n not in dists)
+            if missing:
+                raise WorkerEnvError(
+                    f"worker env for {family} is missing {', '.join(missing)}. "
+                    f"Rebuild it: ollada workers rebuild {recipe.name}")
         return python
     # Fresh build. _run is a test seam for every subprocess call here so
     # tests can observe the venv creation and pip installs without network.
@@ -157,6 +228,19 @@ def ensure_env(recipe: Recipe, _run=subprocess.run) -> Path:
     else:
         _run_checked([str(python), "-m", "pip", "install", *pkgs],
                      f"install worker packages for {family}", _run)
+    # Guard against incompatible family pins: pip resolved the requested
+    # model's pin, but a sibling model may need a disjoint range. Fail
+    # loudly at build time rather than thrashing between rebuilds.
+    installed = installed_transformers(python)
+    if installed is not None:
+        for sibling in _family_recipes(family):
+            sibling_spec = str((sibling.env or {}).get("transformers", ""))
+            if sibling_spec and not spec_satisfied(sibling_spec, installed):
+                raise WorkerEnvError(
+                    f"worker env for {family} resolved transformers {installed}, "
+                    f"which does not satisfy {sibling.name}'s pin "
+                    f"transformers{sibling_spec} — this family needs "
+                    f"per-model envs, which are not built yet")
     return python
 
 

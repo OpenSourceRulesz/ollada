@@ -35,6 +35,7 @@ import contextlib
 import json
 import os
 import sys
+import traceback
 
 
 class WorkerError(RuntimeError):
@@ -151,8 +152,14 @@ def main(argv=None, adapter_factory=None, stdin=None, stdout=None) -> int:
             else:
                 emit({"id": req_id, "ok": False, "error": f"unknown op {op!r}"})
         except Exception as exc:  # noqa: BLE001 — the protocol must report, not die
+            # Include the traceback: the manager-side error used to carry
+            # only the message, which made worker failures (like the Dell
+            # SDARConfig crash) undebuggable from the CLI. The traceback
+            # goes to the error output, never to stdout's protocol lines
+            # beyond this JSON object.
             emit({"id": req_id, "ok": False,
-                  "error": f"{type(exc).__name__}: {exc}"})
+                  "error": f"{type(exc).__name__}: {exc}",
+                  "traceback": traceback.format_exc()})
     return 0
 
 

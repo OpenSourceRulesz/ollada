@@ -164,7 +164,11 @@ class WorkerAdapter(BaseAdapter):
             if msg.get("id") != req_id:
                 continue  # stale or unsolicited; the protocol has no other traffic
             if not msg.get("ok", False):
-                raise AdapterError(str(msg.get("error", "worker error")))
+                err = str(msg.get("error", "worker error"))
+                tb = msg.get("traceback")
+                if tb:
+                    err = f"{err}\n{tb}"
+                raise AdapterError(err)
             return msg["result"]
 
     def _kill(self) -> None:

@@ -56,14 +56,20 @@ def test_family_env_pins_match_their_custom_code():
     # SDAR and Dream share the 4.x era, not one exact version: Dream's
     # custom code breaks on transformers 5.x (RoPE 'default' KeyError),
     # and the 5060 Ti run proved it on 4.57.6 as well as 4.53.3 (T4).
-    # The pin must admit both proven versions and exclude 5.x.
+    # The pin must admit both proven versions and exclude 5.x. SDAR
+    # joined the same cap after the Dell worker run proved 5.x breaks
+    # the 1.7B modeling too (SDARConfig.pad_token_id, 2026-10-25).
     from ollada.recipes import spec_satisfied
 
     dream_pin = by_name["dream:7b"].env["transformers"]
     assert spec_satisfied(dream_pin, "4.53.3") is True
     assert spec_satisfied(dream_pin, "4.57.6") is True
     assert spec_satisfied(dream_pin, "5.3.0") is False
-    assert by_name["sdar:4b"].env["transformers"] == ">=4.57"
+    sdar_pin = by_name["sdar:4b"].env["transformers"]
+    assert sdar_pin == ">=4.57,<5"
+    assert spec_satisfied(sdar_pin, "4.57.6") is True
+    assert spec_satisfied(sdar_pin, "5.3.0") is False
+    assert by_name["sdar:1.7b"].env["transformers"] == sdar_pin
 
 
 def test_get_recipe_roundtrip_and_unknown_model():

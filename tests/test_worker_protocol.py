@@ -112,6 +112,9 @@ def test_adapter_failure_is_an_error_response_not_a_crash():
     ], _ExplodingAdapter)
     load = [m for m in lines if m.get("id") == 1][0]
     assert load["ok"] is False and "boom on load" in load["error"]
+    # The traceback crosses the pipe too: the Dell SDARConfig failure
+    # was undebuggable from the CLI because only the message crossed.
+    assert "traceback" in load and "boom on load" in load["traceback"]
     # The loop survives the failure and answers the next request.
     status = [m for m in lines if m.get("id") == 2][0]
     assert status["ok"] is True

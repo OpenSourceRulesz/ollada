@@ -71,6 +71,29 @@ def test_real_worker_subprocess_reports_adapter_failure(monkeypatch):
     assert manager_mod._LIVE == set()  # the failed worker was reaped, not orphaned
 
 
+def test_manager_error_carries_worker_traceback(monkeypatch):
+    import json
+    import queue
+
+    from ollada.adapters.base import AdapterError
+    from ollada.runtime.manager import WorkerAdapter
+
+    adapter = WorkerAdapter.__new__(WorkerAdapter)
+    adapter._lines = queue.Queue()
+    adapter._proc = None
+    adapter._next_id = 0
+    adapter._step_handler = None
+    adapter._send = lambda obj: None  # no process; feed the reply directly
+    adapter._lines.put(json.dumps({
+        "id": 1, "ok": False, "error": "AttributeError: x",
+        "traceback": "Traceback (most recent call last):\n  ...\nAttributeError: x",
+    }))
+    with pytest.raises(AdapterError) as excinfo:
+        adapter._call("load", model="dream:7b")
+    assert "AttributeError: x" in str(excinfo.value)
+    assert "Traceback (most recent call last)" in str(excinfo.value)
+
+
 def test_inprocess_escape_hatch_still_works(monkeypatch):
     _capable_hardware(monkeypatch)
     monkeypatch.setenv("OLLADA_INPROCESS", "1")

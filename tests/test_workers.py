@@ -35,9 +35,13 @@ def test_pip_packages_dedupe_and_pin():
     dream = _pip_packages(get_recipe("dream:7b"))
     assert dream == ["pyyaml", "torch", "transformers>=4.53.3,<5",
                      "accelerate", "bitsandbytes"]
-    sdar = _pip_packages(get_recipe("sdar:4b"))
-    assert sdar == ["pyyaml", "torch", "transformers>=4.57",
-                    "accelerate", "einops"]
+    # sdar unions the family's extras: 1.7b alone would omit einops,
+    # which 4b needs — the Dell failure. Both models get the same set.
+    sdar_17 = _pip_packages(get_recipe("sdar:1.7b"))
+    assert sdar_17 == ["pyyaml", "torch", "transformers>=4.57,<5",
+                       "accelerate", "einops"]
+    sdar_4b = _pip_packages(get_recipe("sdar:4b"))
+    assert sdar_4b == sdar_17
     diffcoder = _pip_packages(get_recipe("diffcoder:8b"))
     assert "transformers==5.3.0" in diffcoder
 
@@ -69,6 +73,27 @@ def test_ensure_env_splits_torch_to_cpu_index_without_gpu(monkeypatch, tmp_path)
         "https://download.pytorch.org/whl/cpu"
     assert pip_calls[0][-1] == "torch"
     assert "torch" not in pip_calls[1]
+
+
+def test_ensure_env_missing_package_refuses_with_rebuild_pointer(monkeypatch, tmp_path):
+    # The Dell sdar env: right pin, but built from the 1.7b recipe, so
+    # einops was missing when 4b ran. That must refuse here, not as a
+    # bare ImportError inside the worker.
+    monkeypatch.setenv("OLLADA_WORKERS_DIR", str(tmp_path))
+    family_dir = venv_path("sdar")
+    if sys.platform == "win32":
+        (family_dir / "Scripts").mkdir(parents=True)
+        (family_dir / "Scripts" / "python.exe").touch()
+    else:
+        (family_dir / "bin").mkdir(parents=True)
+        (family_dir / "bin" / "python").touch()
+    monkeypatch.setattr(
+        "ollada.workers.installed_transformers", lambda python: "4.57.6")
+    monkeypatch.setattr(
+        "ollada.workers.installed_distributions",
+        lambda python: {"pyyaml", "torch", "transformers", "accelerate"})
+    with pytest.raises(WorkerEnvError, match="ollada workers rebuild sdar:4b"):
+        ensure_env(get_recipe("sdar:4b"))
 
 
 def test_ensure_env_refuses_pin_mismatch(monkeypatch, tmp_path):
