@@ -35,9 +35,9 @@ verified:
 # recipe loader ignores unknown keys, so this is site-builder data only.
 desktop_verified:
   hardware: "Desktop — NVIDIA GeForce RTX 5060 Ti (15.9 GB), Windows 11"
-  vram_gb: 8.34            # peak over 5 observations, ollada's own measurement loop
+  vram_gb: 8.34            # peak over 15 observations, ollada's own measurement loop (unchanged from the 5-observation stamp — peak is stable)
   date: "2026-10-25"
-  notes: "Same fixed prompt set at recipe defaults. Fibonacci recursive and correct (3.8s). Fits with ~6.6 GB to spare (needs ~9.3 GB with headroom) — in line with the 8.87 GB T4 peak."
+  notes: "Same fixed prompt set at recipe defaults. Fibonacci recursive and correct (3.8s). Fits with ~6.6 GB to spare (needs ~9.3 GB with headroom) — in line with the 8.87 GB T4 peak. Evening variant prompts on the same card all correct: 60 km / 45 min train → 80 km/h (27.0s), fib with docstring correct twice (30.3s, 44.2s), one-word capital exactly 'Paris' (13.0s after the worker build)."
 # Second verification, CPU only — drives the card's CPU badge and the model
 # page's CPU addendum (both used to be hardcoded/undocumented). The runtime
 # recipe loader ignores unknown keys, so this is site-builder data only.
