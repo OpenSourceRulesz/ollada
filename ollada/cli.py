@@ -114,6 +114,12 @@ class _CanvasWatch:
     as without watch mode), throttled so a fast GPU cadence drops
     frames instead of ever slowing the model. finish() erases the
     canvas so the final text lands on a clean terminal.
+
+    Redraw contract, learned from a smeared Dell run: a frame always
+    occupies exactly self._lines terminal rows. _draw clears rows a
+    shorter frame leaves behind, and the wrap width is measured on the
+    watch's own stream — shutil's width comes from stdout, which is
+    wrong whenever stdout is piped while stderr stays a terminal.
     """
 
     _MIN_FRAME_SECONDS = 0.12
@@ -130,6 +136,26 @@ class _CanvasWatch:
         # frame draws (used to extinguish the working spinner).
         self.on_first_frame = None
 
+    def _width(self) -> int:
+        """Wrap width, measured on the watch's own stream.
+
+        shutil.get_terminal_size() measures stdout, but the watch
+        writes to stderr — when stdout is piped (to capture the
+        answer) its width comes back wrong, wrapped rows miscount,
+        and every redraw lands in the wrong place. A stream with a
+        tty fd gives the true width; anything else falls back.
+        """
+        try:
+            fd = self._stream.fileno()
+        except Exception:
+            fd = None
+        if fd is not None:
+            try:
+                return max(40, os.get_terminal_size(fd).columns - 1)
+            except Exception:
+                pass
+        return max(40, shutil.get_terminal_size().columns - 1)
+
     def __call__(self, pieces, block_i, num_blocks, step_i, steps):
         now = time.monotonic()
         if self._started and now - self._last_draw < self._MIN_FRAME_SECONDS:
@@ -139,7 +165,7 @@ class _CanvasWatch:
             if self.on_first_frame is not None:
                 self.on_first_frame()
         self._last_draw = now
-        width = max(40, shutil.get_terminal_size().columns - 1)
+        width = self._width()
         lines = self._compose(pieces, width)
         lines.append(
             f"block {block_i + 1}/{num_blocks} · step {min(step_i + 1, steps)}/{steps}"
@@ -184,12 +210,24 @@ class _CanvasWatch:
 
     def _draw(self, lines):
         out = []
-        if self._lines:
-            out.append(f"\033[{self._lines}A")
+        prev = self._lines
+        if prev:
+            out.append(f"\033[{prev}A")
         for i, line in enumerate(lines):
             out.append("\r\033[2K" + line)
             if i < len(lines) - 1:
                 out.append("\n")
+        # A shorter frame leaves the previous frame's bottom rows on
+        # screen: clear them, then move back up to the new last row.
+        # Without this, a shrinking canvas (committed text replacing
+        # a taller masked canvas, or a short answer after a long one)
+        # leaves residue lines behind — the smearing the Dell run
+        # showed, where only status lines survived visibly.
+        extra = prev - len(lines)
+        for _ in range(max(0, extra)):
+            out.append("\n\r\033[2K")
+        if extra > 0:
+            out.append(f"\033[{extra}A")
         try:
             self._stream.write("".join(out))
             self._stream.flush()
