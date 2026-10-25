@@ -13,7 +13,7 @@ import threading
 from ollada import fit, measurements
 from ollada.adapters import create_adapter
 from ollada.adapters.base import BaseAdapter, GenResult
-from ollada.recipes import Recipe, get_recipe
+from ollada.recipes import Recipe, env_mismatch, get_recipe
 
 
 class ModelManager:
@@ -43,6 +43,16 @@ class ModelManager:
             reason = fit.assess(recipe).blocking_reason()
             if reason:
                 raise fit.FitError(reason)
+            # Same refusal, for the dependency pin: a fresh [gpu] install
+            # lands transformers 5.x, which crashes Dream's custom code
+            # deep in load (RoPE 'default' KeyError, 2026-10-25). Refusing
+            # here with the exact pip line beats that traceback. No single
+            # [gpu] pin can satisfy all families (dream needs 4.x,
+            # diffcoder needs 5.3.0), so the check — not a pin — is what
+            # protects a shared env until the isolated-worker upgrade lands.
+            mismatch = env_mismatch(recipe.env)
+            if mismatch:
+                raise fit.FitError(mismatch)
         if self._adapter:
             self._adapter.unload()
             self._adapter = None

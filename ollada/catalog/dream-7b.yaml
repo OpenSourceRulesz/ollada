@@ -11,7 +11,7 @@ size_gb_bf16: 15.2
 quant_default: int8        # ~8 GB — the T4 / 16GB-card default
 dtype: float16             # T4-safe; bf16 cards may override
 env:
-  transformers: "==4.53.3" # Dream's custom code breaks on transformers 5.x (RoPE 'default' KeyError)
+  transformers: ">=4.53.3,<5" # 4.x only: Dream's custom code breaks on transformers 5.x (RoPE 'default' KeyError, proven live 2026-10-25). Verified on 4.53.3 (T4) AND 4.57.6 (RTX 5060 Ti) — the old ==4.53.3 pin was narrower than reality.
   extras: [torch, accelerate, bitsandbytes]
 generate:
   steps: 128               # swept 2026-10-21 (32/64/128/256): 32 and 64 both produced broken Fibonacci code (32 in two independent runs); 128 is the lowest count with no observed failure. 256 was NOT better — it answered the train problem wrong once (see verified notes) at half the speed.
@@ -26,3 +26,11 @@ verified:
   load_seconds: 249.1      # includes the first-time ~15GB weight download in Colab; cached loads are a separate (unmeasured) number
   date: "2026-10-21"
   notes: "Steps swept 2026-10-21 (sweep notebook v0.1.0, same prompt set, ONE run per config at temperature 0.2 — treat as noisy samples, not laws). steps=32 (28 tok/s): math + definition fine, list complete, but Fibonacci code garbled — the same failure as the verification run, so 2/2 at 32. steps=64 (13.5 tok/s): best-structured math of the sweep, Fibonacci STILL broken (unterminated string, tuple-unpacking bugs). steps=128 (6.7 tok/s, THE DEFAULT): Fibonacci clean and correct (simple recursive), math's final answer correct though its intermediate steps are sloppy, everything else fine — the lowest count with no observed failure. steps=256 (3.4 tok/s): Fibonacci fine, but the train problem came out WRONG ('45 / 60 = 60 hours' -> 75 km/h) — the only wrong math answer in the sweep, at half of 128's speed. More steps did not mean better here. Coding still belongs to diffcoder:8b; dream is the general-chat slot."
+# Second verification, desktop GPU — the pre-launch re-check the T4 numbers
+# were waiting on. Same loader-safe shape as sdar:4b's cpu_verified: the
+# runtime recipe loader ignores unknown keys, so this is site-builder data only.
+desktop_verified:
+  hardware: "Desktop — NVIDIA GeForce RTX 5060 Ti (15.9 GB), Windows 11"
+  vram_gb: 9.13            # peak over 13 observations, ollada's own measurement loop
+  date: "2026-10-25"
+  notes: "Same fixed prompt set at recipe defaults, run under transformers 4.57.6 (the recipe pin below was widened to allow it — see env). Train-speed reasoning WRONG twice (3 km/h both times: 45/30 with no minutes-to-hours conversion); one-word capital probe exactly 'Paris'; Fibonacci syntactically broken (elif line missing colon and body). Read with the T4 sweep: at the same 128-step default T4 got Fibonacci clean and math's final answer right, so dream is NOISY on this prompt set, not deterministically broken — but it is the variable one of the three, where sdar:4b and diffcoder:8b were steady. Fits with ~5.8 GB to spare (needs ~10.1 GB with headroom)."

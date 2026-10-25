@@ -53,8 +53,16 @@ def test_family_env_pins_match_their_custom_code():
     # carries threshold explicitly as null (fixed transfer schedule).
     assert "threshold" in by_name["diffcoder:8b"].generate
     assert by_name["diffcoder:8b"].generate["threshold"] is None
-    # SDAR and Dream share the 4.53.3-era environment.
-    assert by_name["dream:7b"].env["transformers"] == "==4.53.3"
+    # SDAR and Dream share the 4.x era, not one exact version: Dream's
+    # custom code breaks on transformers 5.x (RoPE 'default' KeyError),
+    # and the 5060 Ti run proved it on 4.57.6 as well as 4.53.3 (T4).
+    # The pin must admit both proven versions and exclude 5.x.
+    from ollada.recipes import spec_satisfied
+
+    dream_pin = by_name["dream:7b"].env["transformers"]
+    assert spec_satisfied(dream_pin, "4.53.3") is True
+    assert spec_satisfied(dream_pin, "4.57.6") is True
+    assert spec_satisfied(dream_pin, "5.3.0") is False
     assert by_name["sdar:4b"].env["transformers"] == ">=4.57"
 
 

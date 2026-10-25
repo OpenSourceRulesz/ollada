@@ -1,8 +1,9 @@
 """Dream family adapter (Dream-v0-Instruct-7B).
 
 Load path mirrors the proven npc-engine harness: BitsAndBytesConfig for
-8-bit (never a raw load_in_8bit kwarg) and the transformers==4.53.3 pin
-from the recipe (5.x breaks Dream's RoPE config with KeyError 'default').
+8-bit (never a raw load_in_8bit kwarg) and the recipe's transformers 4.x
+pin (5.x breaks Dream's RoPE config with KeyError 'default' — proven live
+on the 5060 Ti run, 2026-10-25; verified on 4.53.3 and 4.57.6).
 
 UNVERIFIED in ollada until the Phase 1 real-load gate passes on a T4.
 """

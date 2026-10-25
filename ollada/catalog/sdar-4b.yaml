@@ -30,6 +30,14 @@ verified:
   load_seconds: 45.1
   date: "2026-10-21"
   notes: "Verified WITH ollada's load repairs active (torch RMSNorm fallback for flash_attn, authors' fused file restored from GitHub, BlockMask loop, eager flex attention, inner-model drive — see adapters/sdar.py). Quality at recipe defaults: math correct with clean steps; Fibonacci correct and runnable (better than dream:7b's garbled attempt); 3-item list complete (dream truncated its own); one-word instruction probe answered exactly 'Paris'. Speed is eager-flex-bound on T4 (scores matrix materialized); compiled flex is a Phase 2 revisit. Colab note: the standard-RAM T4 runtime was not enough during load — High-RAM runtime worked; GPU VRAM itself peaked at only 8.87GB."
+# Third verification, desktop GPU — the pre-launch re-check the T4 numbers
+# were waiting on. Same loader-safe shape as cpu_verified: the runtime
+# recipe loader ignores unknown keys, so this is site-builder data only.
+desktop_verified:
+  hardware: "Desktop — NVIDIA GeForce RTX 5060 Ti (15.9 GB), Windows 11"
+  vram_gb: 8.34            # peak over 5 observations, ollada's own measurement loop
+  date: "2026-10-25"
+  notes: "Same fixed prompt set at recipe defaults. Fibonacci recursive and correct (3.8s). Fits with ~6.6 GB to spare (needs ~9.3 GB with headroom) — in line with the 8.87 GB T4 peak."
 # Second verification, CPU only — drives the card's CPU badge and the model
 # page's CPU addendum (both used to be hardcoded/undocumented). The runtime
 # recipe loader ignores unknown keys, so this is site-builder data only.

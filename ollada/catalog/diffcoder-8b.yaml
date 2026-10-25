@@ -27,3 +27,11 @@ verified:
   load_seconds: 89.5
   date: "2026-10-21"
   notes: "Verified WITH ollada's mask-dtype repair active (their generate_block hardcodes a bf16 mask; fp16-on-T4 needs it aligned — see adapters/diffcoder.py). Steps swept 2026-10-21 (sweep notebook v0.1.0, same prompt set): 64 steps COLLAPSES — repetition degeneration ('by by by...' on the bug-fix prompt, 'maps maps maps' on the hash-map prompt, early-EOS never fires); 128 steps: code fully correct but explanation prose has grammar artifacts ('accumulatinging', 'two couple of issues'); 256 steps (the default): same correct code, prose clean. Quality at the default: bug-fix excellent (both planted bugs diagnosed, corrected code right); palindrome code correct/clean but ignores the 'only output code' instruction (preamble + explanation added); hash-map exact. Known limit at ALL step counts: the model's verbose style (preamble + long docstring) exhausts the 256-token canvas mid-answer on the Fibonacci prompt — a gen_length question, not a steps question; a gen_length bump is future sweep material."
+# Second verification, desktop GPU — the pre-launch re-check the T4 numbers
+# were waiting on. Same loader-safe shape as cpu_verified: the runtime
+# recipe loader ignores unknown keys, so this is site-builder data only.
+desktop_verified:
+  hardware: "Desktop — NVIDIA GeForce RTX 5060 Ti (15.9 GB), Windows 11"
+  vram_gb: 9.17            # peak over 5 observations, ollada's own measurement loop
+  date: "2026-10-25"
+  notes: "Same fixed prompt set at recipe defaults. Train-speed reasoning correct (90 km/h, clean working; first answer 240.2s including first-run warmup, identical repeat 26.0s); one-word capital probe exactly 'Paris' (0.7s); Fibonacci iterative and correct (12.3s). Fits with ~5.7 GB to spare — the T4 'tight, card otherwise idle' worry is resolved: the 15.15 GB T4 peak does not transfer to this card (int8 load, display-driving card)."

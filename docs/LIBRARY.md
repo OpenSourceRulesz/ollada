@@ -11,7 +11,9 @@ measured on the hardware named — no vendor benchmarks.
 | `sdar:4b` | chat | 8.8 GB | 8.87 GB | 12.3 | bf16 | 2026-10-21 | Apache-2.0 |
 
 GPU numbers are from a Colab Tesla T4 (2026-10-21) and are the conservative
-floor; desktop verification (RTX 5060 Ti) is the pre-launch re-check.
+floor. The three GPU models were re-verified on a desktop RTX 5060 Ti on
+2026-10-25 — dream:7b 9.13 GB, sdar:4b 8.34 GB, diffcoder:8b 9.17 GB — with
+notes on each model's site page.
 `sdar:1.7b` was verified on a laptop CPU (2026-10-23) — no GPU was used, so
 it has no VRAM figure. Weights come from Hugging Face — Ollada hosts no
 registry.

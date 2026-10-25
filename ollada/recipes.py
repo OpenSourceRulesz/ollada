@@ -15,6 +15,7 @@ from pathlib import Path
 import yaml
 
 _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9\-]*:[a-z0-9][a-z0-9\.]*$")
+_SPEC_RE = re.compile(r"^\s*(==|!=|>=|<=|>|<)?\s*([0-9][0-9A-Za-z.]*)\s*$")
 
 REQUIRED_FIELDS = (
     "name",
@@ -105,6 +106,84 @@ def validate_recipe(data: dict, path: Path | None = None) -> Recipe:
 
 def catalog_dir() -> Path:
     return Path(__file__).parent / "catalog"
+
+
+def _version_tuple(version: str) -> tuple[int, ...]:
+    """Numeric prefix of a dotted version ('4.57.6' -> (4, 57, 6)).
+
+    Suffixes ('rc1', 'dev') are ignored: ollada pins only ever name
+    releases, and a suffix must never make a release look older.
+    """
+    parts = []
+    for segment in version.strip().split("."):
+        digits = re.match(r"^[0-9]+", segment)
+        parts.append(int(digits.group(0)) if digits else 0)
+    return tuple(parts) or (0,)
+
+
+def _pad(a: tuple[int, ...], b: tuple[int, ...]) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    n = max(len(a), len(b))
+    return a + (0,) * (n - len(a)), b + (0,) * (n - len(b))
+
+
+def spec_satisfied(spec: str, version: str) -> bool:
+    """True if `version` satisfies a comma-separated specifier.
+
+    Supports the shapes ollada recipes actually use: ==, !=, >=, <=, >, <,
+    and a bare version (read as ==). No new dependency: packaging is not
+    in the base install, and this is the only place that needs it.
+    An unparseable clause fails closed (returns False) rather than
+    silently passing a load that will crash deeper.
+    """
+    want = _version_tuple(version)
+    for clause in spec.split(","):
+        match = _SPEC_RE.match(clause)
+        if not match:
+            return False
+        op, pinned = match.group(1) or "==", _version_tuple(match.group(2))
+        have, pin = _pad(want, pinned)
+        if op == "==" and not have == pin:
+            return False
+        if op == "!=" and not have != pin:
+            return False
+        if op == ">=" and not have >= pin:
+            return False
+        if op == "<=" and not have <= pin:
+            return False
+        if op == ">" and not have > pin:
+            return False
+        if op == "<" and not have < pin:
+            return False
+    return True
+
+
+def env_mismatch(env: dict, installed_version: str | None = None) -> str | None:
+    """Error text if the installed transformers breaks this recipe's pin.
+
+    Returns None when there is nothing to check (no pin, or transformers
+    not installed — the missing-extra path reports that itself) and when
+    the pin is satisfied. The caller decides whether to refuse; this
+    only states the fact, so tests can pin it without a GPU.
+    """
+    spec = (env or {}).get("transformers")
+    if not spec:
+        return None
+    if installed_version is None:
+        try:
+            from importlib.metadata import PackageNotFoundError, version
+        except ImportError:  # pragma: no cover — importlib.metadata is stdlib
+            return None
+        try:
+            installed_version = version("transformers")
+        except PackageNotFoundError:
+            return None
+    if spec_satisfied(str(spec), installed_version):
+        return None
+    return (
+        f"installed transformers {installed_version} does not satisfy this "
+        f"model's pin (transformers{spec}). Switch envs first: "
+        f'pip install "transformers{spec}"'
+    )
 
 
 def load_catalog(directory: Path | None = None) -> list[Recipe]:
