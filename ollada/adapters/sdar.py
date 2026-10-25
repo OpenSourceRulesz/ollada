@@ -724,6 +724,53 @@ def _sdpa_kwargs(kwargs: dict) -> dict:
     return out
 
 
+def _sdpa_attn_mask(attention_mask, query) -> torch.Tensor:
+    """Position mask for SDPA as an additive float mask in query dtype.
+
+    SDPA accepts bool, float, or query-dtype masks — and nothing else.
+    The BlockMask path must NOT use to_dense(): on current torch it
+    returns an int32 BLOCK mask (one entry per block pair), not a
+    per-position mask, so even a dtype cast would compute wrong
+    attention (this was the 2026-10-25 Dell failure: int dtype first,
+    block-level shape hiding behind it). Instead the BlockMask's own
+    mask_mod is evaluated over a Q x KV index grid, which reproduces
+    the loop's mask exactly (True = attend, the adapter's convention
+    everywhere: the loop's 0/1 mask, _to_block_mask's closure, and
+    SDPA's own bool convention all agree). A plain tensor mask
+    normalizes the same way (nonzero = attend). Additive float (0 for
+    attend, -inf for masked) is backend-safe where bool masks are not,
+    and carrying the query dtype satisfies SDPA's validation exactly.
+    """
+    if hasattr(attention_mask, "mask_mod") and hasattr(attention_mask, "seq_lengths"):
+        try:
+            q_len, kv_len = attention_mask.seq_lengths
+            q_idx = torch.arange(q_len, device=query.device)[:, None]
+            kv_idx = torch.arange(kv_len, device=query.device)[None, :]
+            attend = attention_mask.mask_mod(0, 0, q_idx, kv_idx)
+        except Exception as exc:
+            raise AdapterError(
+                "SDAR SDPA experiment: could not reconstruct the position "
+                f"mask from the BlockMask's mask_mod: {exc}"
+            ) from exc
+    elif isinstance(attention_mask, torch.Tensor):
+        attend = attention_mask
+    else:
+        raise AdapterError(
+            "SDAR SDPA experiment: unsupported attention_mask type "
+            f"{type(attention_mask).__name__} — expected a BlockMask or tensor"
+        )
+    if attend.dtype != torch.bool:
+        attend = attend != 0
+    additive = torch.where(
+        attend,
+        torch.tensor(0.0, device=query.device),
+        torch.tensor(float("-inf"), device=query.device),
+    ).to(query.dtype)
+    if additive.dim() == 2:
+        additive = additive.reshape(1, 1, *additive.shape)
+    return additive
+
+
 def _swap_flex_to_sdpa(model) -> bool:
     """Swap SDAR's fused_flex_attention for an SDPA stand-in (Exp. 1).
 
@@ -732,16 +779,13 @@ def _swap_flex_to_sdpa(model) -> bool:
     and unpacks TWO values, tolerating None weights (its own guard:
     `attn_weights.to(...) if attn_weights is not None else None`).
     The stand-in therefore returns (sdpa_output, None) — the same shape
-    the 1.7B's own attention returns. The dense mask comes from
-    BlockMask.to_dense(): a bool tensor with True = attend, exactly the
-    convention the 1.7B's SDPA call already consumes (its mask is the
-    loop's 0/1 mask through .bool()).
+    the 1.7B's own attention returns. The position mask comes from the
+    BlockMask's mask_mod over an index grid (see _sdpa_attn_mask), never
+    from to_dense(), which returns a block-level int mask.
 
-    Raises AdapterError if the swap fails, and wraps a missing
-    to_dense() the same way — same loud-failure rule as the eager
-    decompile: a half-swapped attention must never silently run, and a
-    torch build without to_dense() must fail with its name on the
-    error, not as a bare AttributeError mid-generation.
+    Raises AdapterError if the swap fails — same loud-failure rule as
+    the eager decompile: a half-swapped attention must never silently
+    run.
     """
     import importlib
 
@@ -749,16 +793,11 @@ def _swap_flex_to_sdpa(model) -> bool:
         module = importlib.import_module(model.__class__.__module__)
 
         def sdpa_flex_attention(query, key, value, attention_mask, **kwargs):
-            try:
-                dense = attention_mask.to_dense()
-            except AttributeError as exc:
-                raise AdapterError(
-                    "SDAR SDPA experiment: this torch build's BlockMask "
-                    "has no to_dense() — cannot densify the mask for SDPA."
-                ) from exc
             return (
                 F.scaled_dot_product_attention(
-                    query, key, value, attn_mask=dense, **_sdpa_kwargs(kwargs)
+                    query, key, value,
+                    attn_mask=_sdpa_attn_mask(attention_mask, query),
+                    **_sdpa_kwargs(kwargs),
                 ),
                 None,
             )
@@ -1058,7 +1097,7 @@ class SdarAdapter(BaseAdapter):
             if _attention_mode_from_env() == "sdpa" and _swap_flex_to_sdpa(self.model):
                 self.load_notes.append(
                     "flex attention: EXPERIMENTAL SDPA (OLLADA_SDAR_SDPA=1) — "
-                    "BlockMask densified via to_dense(), eager flex bypassed"
+                    "position mask reconstructed via mask_mod grid, eager flex bypassed"
                 )
             elif _decompile_flex_attention(self.model):
                 self.load_notes.append("flex attention: eager (compile wrapper swapped out)")
