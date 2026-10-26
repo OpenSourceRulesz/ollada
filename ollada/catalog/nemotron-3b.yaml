@@ -1,0 +1,21 @@
+# ollada Recipe (schema v1) — nemotron:3b
+# UNVERIFIED: first real-load test (desktop GPU, 2026-10-26). Defaults are
+# PROVISIONAL until the verification block is filled by a real-load run
+# (see PLAN.md §7). Never publish vendor numbers as verified.
+name: nemotron:3b
+family: nemotron
+source: nvidia/Nemotron-Labs-Diffusion-3B
+license: NVIDIA Nemotron Open Model License  # per the family write-ups; verify from the card before any shelf listing
+task: chat
+description: Nemotron-Labs Diffusion 3B instruct — NVIDIA tri-mode (AR/diffusion/self-speculation) model; ollada runs diffusion mode only. Named 3B, ~4B parameters.
+size_gb_bf16: 8.0        # ESTIMATE ONLY (unverified): ~4B params x 2 bytes. The fit check treats this as a weights-size estimate, never a measured peak.
+quant_default: bf16        # plain bf16 load; no quantization
+dtype: bfloat16            # weights are bf16; Blackwell CUDA path
+env:
+  transformers: "==5.3.0" # adapter requires transformers>=5.0.0 (trust_remote_code); 5.3.0 is the 5.x line already proven on the desktop (diffcoder env). Widen if the load demands newer.
+  extras: []               # no extra deps known; the worker env already brings pyyaml, torch, transformers, accelerate
+generate:
+  mode: diffusion          # adapter default; stated explicitly so the test runs diffusion mode, not AR/speculation
+  max_new_tokens: 256      # the canvas for this family. NOTE: the CLI --length flag maps to gen_length, which this adapter does not read, so --length and the REPL /length command do nothing here — change this value if answers truncate
+  block_length: 32         # adapter default
+  threshold: 0.9           # adapter default
