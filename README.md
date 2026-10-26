@@ -6,6 +6,8 @@
 
 <p align="center"><strong>The shelf for open-source diffusion language models.</strong></p>
 
+<p align="center"><a href="https://opensourcerulesz.github.io/ollada">Live site</a> — the shelf, verified numbers, and install guide.</p>
+
 Ollama is where people go to get open-source autoregressive models: clean names, one command, it just works. Diffusion language models (dLLMs) — LLaDA, Dream, SDAR, Stable-DiffCoder — have none of that. They're scattered across Hugging Face with incompatible generation code, undocumented defaults, and no verified "this actually runs" guarantee.
 
 **Ollada** is building the equivalent for diffusion:
