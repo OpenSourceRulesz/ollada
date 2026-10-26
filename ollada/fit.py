@@ -135,15 +135,27 @@ def _detect_via_nvidia_smi(hw: Hardware) -> bool:
             ],
             capture_output=True,
             text=True,
-            timeout=5,
+            # First invocation under load can be slow; a timeout here
+            # used to silently downgrade a GPU machine to CPU torch.
+            timeout=15,
         )
         if out.returncode != 0:
             return False
-        name, total_mib, free_mib = (p.strip() for p in out.stdout.splitlines()[0].split(","))
-        hw.gpu_name = name
-        hw.vram_total_gb = float(total_mib) / 1024
-        hw.vram_free_gb = float(free_mib) / 1024
-        return True
+        # Take the first line that actually parses — a warning line
+        # ahead of the data must not poison the whole detection.
+        for line in out.stdout.splitlines():
+            parts = [p.strip() for p in line.split(",")]
+            if len(parts) != 3:
+                continue
+            try:
+                name, total_mib, free_mib = parts
+                hw.vram_total_gb = float(total_mib) / 1024
+                hw.vram_free_gb = float(free_mib) / 1024
+            except ValueError:
+                continue
+            hw.gpu_name = name
+            return True
+        return False
     except Exception:
         return False
 

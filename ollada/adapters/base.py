@@ -23,6 +23,10 @@ class GenResult:
     tokens: int
     seconds: float
     nfe: int | None = None  # number of function evaluations, when the family reports it
+    # Worker-reported measurement (worker path only; in-process loads use
+    # measurements.capture_and_record instead). None means "not measured".
+    peak_gb: float | None = None
+    hardware: str | None = None
 
 
 class AdapterError(RuntimeError):

@@ -56,11 +56,11 @@ docs/
   LIBRARY.md        # human-readable shelf, generated from catalog/
 ```
 
-**Isolation rule (added v1.2, forced by a real conflict):** families have incompatible dependency pins — Dream needs `transformers==4.53.3`, Nemotron needs `transformers>=5.0`. So each family runs in an **isolated worker subprocess with its own pinned environment**; the daemon talks to one worker at a time over a local pipe. This also buys crash isolation (a model segfault can't kill the daemon) and clean VRAM unload (kill the worker). Phase 1 starts in-process; with the SDAR decision (2026-10-21) all three v0.1 families can share the 4.53.3-era environment, so isolation is deferred until the Nemotron addition lands post-v0.1 — it remains required before Nemotron ships, not before v0.1.
+**Isolation rule (added v1.2, forced by a real conflict; built in 0.3.0):** families have incompatible dependency pins — Dream needs `transformers>=4.53.3,<5`, DiffCoder needs `transformers==5.3.0`, SDAR needs `transformers>=4.57`. So each family runs in an **isolated worker subprocess with its own pinned environment**; the daemon talks to one worker at a time over a local pipe. This also buys crash isolation (a model segfault can't kill the daemon) and clean VRAM unload (kill the worker). Phase 1 started in-process; the 0.2.0 fail-fast pin check papered over the conflict, and the dream/diffcoder collision (no single transformers satisfies both) is what pulled isolation forward from "when Nemotron lands" to the 0.3.0 headline. Worker envs live in `~/.ollada/workers/<family>/`, built lazily on first load of a family, pinned from the recipe's `env` block; `ollada workers` lists them, `ollada workers rebuild <model>` rebuilds one. Protocol note, learned from SDAR: stdout is protocol-only in the worker — adapter code runs with stdout redirected to stderr, because upstream modeling files can print to stdout during load.
 
 Design rules carried over from npc-engine / PrivateContext (learned the hard way):
 - Never pass raw quantization kwargs into a model's `__init__` (the `load_in_8bit` crash) — always `BitsAndBytesConfig`.
-- Pin transformers *per adapter family* if needed, and say so in the recipe — Dream needed `transformers==4.53.3` (ROPE `'default'` KeyError on 5.x).
+- Pin transformers *per adapter family* if needed, and say so in the recipe — Dream needs `transformers>=4.53.3,<5` (ROPE `'default'` KeyError on 5.x); DiffCoder needs `==5.3.0`. Per-family worker envs (0.3.0) are how these pins coexist.
 - Mocks don't cover real load paths. A model is not "supported" until a real-load verification has passed on real GPU hardware (see §7).
 - PowerShell-first for all Windows-facing instructions; one command per fenced block, full args on one line.
 

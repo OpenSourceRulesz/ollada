@@ -17,6 +17,7 @@ import time
 from ollada import __version__, fit
 from ollada.recipes import RecipeError, load_catalog
 from ollada.runtime.manager import ModelManager
+from ollada.workers import WorkerEnvError
 
 DEFAULT_PORT = 11435
 
@@ -55,7 +56,8 @@ def create_app(manager: ModelManager | None = None):
             return manager.chat(model, messages, opts or None, force=force)
         except RecipeError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
-        except fit.FitError as exc:
+        except (fit.FitError, WorkerEnvError) as exc:
+            # Refusals (won't fit, worker env missing/mismatched), not crashes.
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except Exception as exc:  # adapter load/generation failure
             raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc

@@ -11,7 +11,7 @@ size_gb_bf16: 8.8
 quant_default: bf16        # fits 16GB cards whole; int8 optional for 8GB cards
 dtype: float16             # T4-safe (weights are bf16; fp16 load per the reference script's default)
 env:
-  transformers: ">=4.57" # its modeling imports TransformersKwargs (added in 4.57); the README's >=4.52.4 is stale. NOT the Dream env — see the adapter docstring for the three load-time repairs (flash_attn fallback, missing HF file, BlockMask-only attention)
+  transformers: ">=4.57,<5" # 4.x only, same as 1.7b: 5.x is unverified for this family and breaks the 1.7B modeling (SDARConfig.pad_token_id — Dell worker run, 2026-10-25). Verified on 4.57.6 (T4 + RTX 5060 Ti). Its modeling imports TransformersKwargs (added in 4.57); the README's >=4.52.4 is stale. NOT the Dream env — see the adapter docstring for the three load-time repairs (flash_attn fallback, missing HF file, BlockMask-only attention)
   extras: [torch, accelerate, einops] # einops: the 4B modeling does `from einops import rearrange`; a clean env without it cannot load the model (found on the laptop CPU runs, 2026-10-23; Colab had it ambiently)
 generate:
   gen_length: 256

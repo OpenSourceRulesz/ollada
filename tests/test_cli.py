@@ -122,3 +122,62 @@ def test_canvas_watch_draws_frames_and_finishes_clean():
     assert "block 1/4" in out
     assert "\033[" in out  # ANSI redraw/clear sequences were used
     assert watch._lines == 0 and watch._started is False
+
+
+def test_canvas_watch_clears_rows_when_frame_shrinks():
+    from ollada.cli import _CanvasWatch
+
+    stream = _FakeStream(tty=True)
+    watch = _CanvasWatch(stream=stream)
+    watch._draw(["aaaa", "bbbb", "cccc", "block 1/4 · step 1/4"])
+    assert watch._lines == 4
+    stream.writes.clear()
+    watch._draw(["short", "block 1/4 · step 2/4"])
+    out = "".join(stream.writes)
+    assert "\033[4A" in out  # moved up over the tall previous frame
+    # 2 rewritten rows + 2 cleared leftover rows, then back up 2.
+    assert out.count("\033[2K") == 4
+    assert "\033[2A" in out
+    assert watch._lines == 2
+
+
+def test_canvas_watch_growing_frame_clears_nothing_extra():
+    from ollada.cli import _CanvasWatch
+
+    stream = _FakeStream(tty=True)
+    watch = _CanvasWatch(stream=stream)
+    watch._draw(["one", "block 1/4 · step 1/4"])
+    stream.writes.clear()
+    watch._draw(["a", "b", "c", "block 1/4 · step 2/4"])
+    out = "".join(stream.writes)
+    assert "\033[2A" in out  # moved up over the short previous frame
+    assert out.count("\033[2K") == 4  # exactly the 4 rewritten rows
+    assert watch._lines == 4
+
+
+def test_canvas_watch_width_prefers_its_own_stream_fd(monkeypatch):
+    import os
+
+    from ollada.cli import _CanvasWatch
+
+    class _FdStream(_FakeStream):
+        def fileno(self):
+            return 7
+
+    monkeypatch.setattr(
+        os, "get_terminal_size",
+        lambda fd: os.terminal_size((123, 40)) if fd == 7 else (_ for _ in ()).throw(OSError()),
+    )
+    watch = _CanvasWatch(stream=_FdStream(tty=True))
+    assert watch._width() == 122
+
+
+def test_canvas_watch_width_falls_back_without_a_tty_fd(monkeypatch):
+    import os
+
+    from ollada.cli import _CanvasWatch
+
+    monkeypatch.setattr(os, "get_terminal_size", lambda fd: (_ for _ in ()).throw(OSError()))
+    watch = _CanvasWatch(stream=_FakeStream(tty=True))
+    # No fd to measure: falls back to shutil's width, still sane.
+    assert watch._width() >= 40

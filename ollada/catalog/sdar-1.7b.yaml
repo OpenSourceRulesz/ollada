@@ -12,7 +12,7 @@ size_gb_bf16: 4.1
 quant_default: bf16
 dtype: float16             # GPU loads honor this; the adapter's CPU plan forces bf16 (fp16 is not CPU-viable)
 env:
-  transformers: ">=4.57" # its modeling is the pre-rename revision (imports LossKwargs; the adapter aliases it to TransformersKwargs at load). No einops: this revision's modeling never imports it (the 4B's does).
+  transformers: ">=4.57,<5" # 4.x only: the 1.7B's pre-rename modeling breaks on transformers 5.x (SDARConfig has no pad_token_id there — found on the Dell worker run, 2026-10-25). Verified on 4.57.6. Its modeling is the pre-rename revision (imports LossKwargs; the adapter aliases it to TransformersKwargs at load). No einops: this revision's modeling never imports it (the 4B's does) — but the worker env unions the family's extras, so einops is present anyway.
   extras: [torch, accelerate]
 generate:
   gen_length: 128          # the CPU-verified canvas for this size; longer answers want a per-run length override

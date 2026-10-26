@@ -1,7 +1,8 @@
-"""ollada CLI — list / show / pull / run / serve / ps / rm / recommend.
+"""ollada CLI — list / show / pull / run / serve / ps / rm / recommend / workers.
 
-The base install is dependency-light (pyyaml only). GPU work needs
-`pip install "ollada[gpu]"`; serving needs `pip install "ollada[server]"`.
+The base install is dependency-light (pyyaml + huggingface-hub). Models run
+in per-family worker venvs built on first load, so a base install can run
+models without the [gpu] extra; serving needs `pip install "ollada[server]"`.
 Commands that need a missing extra say so instead of crashing.
 """
 
@@ -16,8 +17,7 @@ import time
 
 from ollada import __version__, fit, measurements
 from ollada.recipes import RecipeError, get_recipe, load_catalog
-
-GPU_HINT = 'this command needs the GPU stack: pip install "ollada[gpu]"'
+from ollada.workers import WorkerEnvError
 
 
 def _parse_length_command(text: str) -> int | None:
@@ -114,6 +114,12 @@ class _CanvasWatch:
     as without watch mode), throttled so a fast GPU cadence drops
     frames instead of ever slowing the model. finish() erases the
     canvas so the final text lands on a clean terminal.
+
+    Redraw contract, learned from a smeared Dell run: a frame always
+    occupies exactly self._lines terminal rows. _draw clears rows a
+    shorter frame leaves behind, and the wrap width is measured on the
+    watch's own stream — shutil's width comes from stdout, which is
+    wrong whenever stdout is piped while stderr stays a terminal.
     """
 
     _MIN_FRAME_SECONDS = 0.12
@@ -130,6 +136,26 @@ class _CanvasWatch:
         # frame draws (used to extinguish the working spinner).
         self.on_first_frame = None
 
+    def _width(self) -> int:
+        """Wrap width, measured on the watch's own stream.
+
+        shutil.get_terminal_size() measures stdout, but the watch
+        writes to stderr — when stdout is piped (to capture the
+        answer) its width comes back wrong, wrapped rows miscount,
+        and every redraw lands in the wrong place. A stream with a
+        tty fd gives the true width; anything else falls back.
+        """
+        try:
+            fd = self._stream.fileno()
+        except Exception:
+            fd = None
+        if fd is not None:
+            try:
+                return max(40, os.get_terminal_size(fd).columns - 1)
+            except Exception:
+                pass
+        return max(40, shutil.get_terminal_size().columns - 1)
+
     def __call__(self, pieces, block_i, num_blocks, step_i, steps):
         now = time.monotonic()
         if self._started and now - self._last_draw < self._MIN_FRAME_SECONDS:
@@ -139,7 +165,7 @@ class _CanvasWatch:
             if self.on_first_frame is not None:
                 self.on_first_frame()
         self._last_draw = now
-        width = max(40, shutil.get_terminal_size().columns - 1)
+        width = self._width()
         lines = self._compose(pieces, width)
         lines.append(
             f"block {block_i + 1}/{num_blocks} · step {min(step_i + 1, steps)}/{steps}"
@@ -184,12 +210,24 @@ class _CanvasWatch:
 
     def _draw(self, lines):
         out = []
-        if self._lines:
-            out.append(f"\033[{self._lines}A")
+        prev = self._lines
+        if prev:
+            out.append(f"\033[{prev}A")
         for i, line in enumerate(lines):
             out.append("\r\033[2K" + line)
             if i < len(lines) - 1:
                 out.append("\n")
+        # A shorter frame leaves the previous frame's bottom rows on
+        # screen: clear them, then move back up to the new last row.
+        # Without this, a shrinking canvas (committed text replacing
+        # a taller masked canvas, or a short answer after a long one)
+        # leaves residue lines behind — the smearing the Dell run
+        # showed, where only status lines survived visibly.
+        extra = prev - len(lines)
+        for _ in range(max(0, extra)):
+            out.append("\n\r\033[2K")
+        if extra > 0:
+            out.append(f"\033[{extra}A")
         try:
             self._stream.write("".join(out))
             self._stream.flush()
@@ -274,7 +312,9 @@ def _cmd_pull(args) -> int:
     try:
         from huggingface_hub import snapshot_download
     except ImportError:
-        print(GPU_HINT, file=sys.stderr)
+        # huggingface-hub is a base dependency, so this fires only on a
+        # broken install — not on a missing [gpu] extra (pull needs no torch).
+        print('pulling needs huggingface-hub: pip install huggingface-hub', file=sys.stderr)
         return 2
     print(f"pulling {r.name} from {r.source} ...")
     path = snapshot_download(repo_id=r.source)
@@ -283,11 +323,9 @@ def _cmd_pull(args) -> int:
 
 
 def _cmd_run(args) -> int:
-    try:
-        import torch  # noqa: F401
-    except ImportError:
-        print(GPU_HINT, file=sys.stderr)
-        return 2
+    # No torch gate here: the model runs in its worker venv, which owns
+    # torch. A base install (pyyaml only) runs models fine once the
+    # worker env is built; a failed build reports itself clearly.
     from ollada.runtime.manager import ModelManager
 
     if args.length is not None and args.length < 1:
@@ -302,13 +340,17 @@ def _cmd_run(args) -> int:
     def _overrides() -> dict | None:
         return {"gen_length": session_length} if session_length else None
 
-    # Watch mode is simply what a terminal run looks like: when
-    # stderr is a real terminal and the adapter can report its
-    # canvas, the canvas replaces the spinner (the manager forwards
-    # the callback only to adapters that support it). OLLADA_NO_WATCH
-    # in the environment turns it off; piped output never sees it.
+    # Watch mode is opt-in (OLLADA_WATCH=1). The live canvas is a nice
+    # effect, but its in-place ANSI redraw proved unreliable in VS
+    # Code's terminal: frames survived below the prompt after the run
+    # ended, and two redraw fixes (shrink-clear, stream-measured width)
+    # did not change the symptom — the foreground byte stream replays
+    # clean in a terminal emulator, so the residue comes from outside
+    # the run (a stale process on the terminal, or the terminal
+    # replaying buffered frames late). Default runs stay clean
+    # (spinner + answer); OLLADA_NO_WATCH still forces it off.
     watch = None
-    if "OLLADA_NO_WATCH" not in os.environ:
+    if "OLLADA_WATCH" in os.environ and "OLLADA_NO_WATCH" not in os.environ:
         try:
             if sys.stderr.isatty():
                 watch = _CanvasWatch()
@@ -384,6 +426,26 @@ def _cmd_recommend(_args) -> int:
     return 0
 
 
+def _cmd_workers(args) -> int:
+    from ollada.recipes import load_catalog
+    from ollada.workers import list_envs, rebuild_env
+
+    if args.workers_command == "rebuild":
+        from ollada.recipes import get_recipe
+
+        recipe = get_recipe(args.name)
+        rebuild_env(recipe)
+        print(f"rebuilt worker env for {recipe.family}")
+        return 0
+    rows = list_envs(load_catalog())
+    print(f"{'FAMILY':<12} {'BUILT':<8} {'TRANSFORMERS':<14} PATH")
+    for row in rows:
+        print(f"{row['family']:<12} "
+              f"{'yes' if row['built'] else 'no':<8} "
+              f"{row['transformers'] or '—':<14} {row['path']}")
+    return 0
+
+
 def _cmd_serve(args) -> int:
     try:
         import fastapi  # noqa: F401
@@ -417,7 +479,8 @@ def _cmd_rm(args) -> int:
     try:
         from huggingface_hub import scan_cache_dir
     except ImportError:
-        print(GPU_HINT, file=sys.stderr)
+        # huggingface-hub is a base dependency; see _cmd_pull.
+        print('this needs huggingface-hub: pip install huggingface-hub', file=sys.stderr)
         return 2
     found = False
     for repo in list(scan_cache_dir().repos):
@@ -475,6 +538,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("name")
     p.set_defaults(fn=_cmd_rm)
 
+    p = sub.add_parser("workers", help="inspect or rebuild per-family worker envs")
+    wsub = p.add_subparsers(dest="workers_command")
+    wsub.add_parser("list", help="show worker envs and their transformers versions")
+    pr = wsub.add_parser("rebuild", help="delete and rebuild one family's worker env")
+    pr.add_argument("name", help="a model name, e.g. dream:7b")
+    p.set_defaults(fn=_cmd_workers)
+
     return parser
 
 
@@ -491,6 +561,9 @@ def main(argv=None) -> int:
         return 2
     except fit.FitError as exc:
         print(f"fit check: {exc}", file=sys.stderr)
+        return 2
+    except WorkerEnvError as exc:
+        print(f"error: {exc}", file=sys.stderr)
         return 2
 
 
