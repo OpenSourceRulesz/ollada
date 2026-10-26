@@ -12,7 +12,7 @@ size_gb_bf16: 8.0        # ESTIMATE ONLY (unverified): ~4B params x 2 bytes. The
 quant_default: bf16        # plain bf16 load; no quantization
 dtype: bfloat16            # weights are bf16; Blackwell CUDA path
 env:
-  transformers: "==5.3.0" # adapter requires transformers>=5.0.0 (trust_remote_code); 5.3.0 is the 5.x line already proven on the desktop (diffcoder env). Widen if the load demands newer.
+  transformers: "==5.20.2" # 5.3.0 FAILED: NVIDIA's vendored modeling_ministral.py imports check_model_inputs, which 5.3.0 removed from transformers.utils.generic (laptop run, 2026-10-26). 5.20.2 restores it as a backward-compat shim — verified by reading both wheels. NVIDIA's card floor is >=5.0.0, but the floor is not sufficient: 5.3.0 satisfies it and breaks. Fallback if 5.20.2 trips elsewhere: 4.57.6 (defines the symbol in full; the sdar env's proven version).
   extras: []               # no extra deps known; the worker env already brings pyyaml, torch, transformers, accelerate
 generate:
   mode: diffusion          # adapter default; stated explicitly so the test runs diffusion mode, not AR/speculation
