@@ -2,17 +2,16 @@ import pytest
 
 from ollada.recipes import RecipeError, get_recipe, load_catalog, validate_recipe
 
-EXPECTED_SHELF = {"dream:7b", "sdar:4b", "diffcoder:8b", "sdar:1.7b"}
+EXPECTED_SHELF = {"dream:7b", "sdar:4b", "diffcoder:8b", "sdar:1.7b", "nemotron:3b"}
 
 
 def test_shelf_verified_models_present_and_extras_unverified():
     # The MVP three (T4-verified) plus sdar:1.7b, added 2026-10-23 as
-    # the CPU tier's first entry (laptop-CPU-verified, see its recipe).
-    # The verified shelf must all be present; anything else in the
-    # catalog must be UNVERIFIED — a test recipe like nemotron:3b
-    # (added 2026-10-26 for a desktop first-load run) joins the shelf
-    # only by earning a verification block, never by landing in the
-    # catalog.
+    # the CPU tier's first entry, plus nemotron:3b, added 2026-10-26 as
+    # the shelf's second CPU-verified entry (laptop-CPU-verified, see
+    # its recipe). The verified shelf must all be present; anything
+    # else in the catalog must be UNVERIFIED — it joins the shelf only
+    # by earning a verification block, never by landing in the catalog.
     recipes = {r.name: r for r in load_catalog()}
     assert EXPECTED_SHELF <= set(recipes)
     for name, recipe in recipes.items():
@@ -53,6 +52,13 @@ def test_verification_state_matches_the_record():
     assert sdar17.is_verified is True
     assert "CPU" in sdar17.verified["hardware"]
     assert "vram_gb" not in sdar17.verified
+    # nemotron:3b earned the shelf's second CPU verification on a laptop,
+    # 2026-10-26: hardware-labelled as a CPU run, and it must NOT carry
+    # a VRAM figure — none was measured.
+    nemotron = by_name["nemotron:3b"]
+    assert nemotron.is_verified is True
+    assert "CPU" in nemotron.verified["hardware"]
+    assert "vram_gb" not in nemotron.verified
 
 
 def test_family_env_pins_match_their_custom_code():

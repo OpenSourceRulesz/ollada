@@ -1,14 +1,13 @@
 # ollada Recipe (schema v1) — nemotron:3b
-# UNVERIFIED: first real-load test (desktop GPU, 2026-10-26). Defaults are
-# PROVISIONAL until the verification block is filled by a real-load run
-# (see PLAN.md §7). Never publish vendor numbers as verified.
+# VERIFIED ON CPU (laptop, 2026-10-26) — see the verified block. A GPU
+# verification has not been run. Never publish vendor numbers as verified.
 name: nemotron:3b
 family: nemotron
 source: nvidia/Nemotron-Labs-Diffusion-3B
-license: NVIDIA Nemotron Open Model License  # per the family write-ups; verify from the card before any shelf listing
+license: NVIDIA Nemotron Open Model License  # confirmed from NVIDIA's own HF blog post (2026-05-23): text models at 3B/8B/14B under this license
 task: chat
 description: Nemotron-Labs Diffusion 3B instruct — NVIDIA tri-mode (AR/diffusion/self-speculation) model; ollada runs diffusion mode only. Named 3B, ~4B parameters.
-size_gb_bf16: 8.0        # ESTIMATE ONLY (unverified): ~4B params x 2 bytes. The fit check treats this as a weights-size estimate, never a measured peak.
+size_gb_bf16: 7.66       # measured weights file (model.safetensors, 7.66 GB, laptop pull 2026-10-26). The fit check treats this as a weights-size estimate until a peak is measured — no local peak was recorded on the CPU run (no VRAM to measure).
 quant_default: bf16        # plain bf16 load; no quantization
 dtype: bfloat16            # weights are bf16; Blackwell CUDA path
 env:
@@ -19,3 +18,8 @@ generate:
   max_new_tokens: 256      # the canvas for this family. NOTE: the CLI --length flag maps to gen_length, which this adapter does not read, so --length and the REPL /length command do nothing here — change this value if answers truncate
   block_length: 32         # adapter default
   threshold: 0.9           # adapter default
+verified:
+  hardware: "Laptop — Intel Core Ultra 7 365 (8 cores), 32GB RAM, Windows 11; CPU only, bf16"
+  date: "2026-10-26"
+  min_host_ram_gb: 16      # prudent floor, NOT a measurement: weights are 7.66 GB plus torch runtime, and no host-RAM peak was recorded on the CPU run
+  notes: "Verified on CPU through ollada's own adapter (isolated nemotron worker env, transformers 5.20.2 — see the env note: 5.3.0 fails this model's vendored code). Fixed prompt set at recipe defaults, all correct: capital exactly 'Paris' (17.9s), train 90 km/h with clean working, run twice with identical text (62.1s, 57.3s), Fibonacci iterative and correct (19.0s) — times include cold load per CLI run. Mini code eval (scripts/mini_code_eval.py) 11/12: the miss was count_vowels, which produced no callable function (a format miss, not a wrong answer); the one task both SDARs failed, merge_dicts_sum, passed. No vram_gb and no tokens_per_sec: this verification used no GPU, and token counts were not recorded. GPU verification not yet run. This run contradicts the secondary-source claim that CUDA-capable GPU hardware is required."

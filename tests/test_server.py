@@ -57,11 +57,11 @@ def test_health_and_tags(client):
     assert client.get("/health").json()["status"] == "ok"
     models = {m["name"]: m for m in client.get("/api/tags").json()["models"]}
     # The verified shelf must all be present; anything else listed must
-    # be UNVERIFIED (a test recipe like nemotron:3b) — listable, but
+    # be UNVERIFIED (a recipe not yet verified) — listable, but
     # never presented as verified.
-    assert {"dream:7b", "sdar:4b", "diffcoder:8b", "sdar:1.7b"} <= set(models)
+    assert {"dream:7b", "sdar:4b", "diffcoder:8b", "sdar:1.7b", "nemotron:3b"} <= set(models)
     for name, model in models.items():
-        if name not in {"dream:7b", "sdar:4b", "diffcoder:8b", "sdar:1.7b"}:
+        if name not in {"dream:7b", "sdar:4b", "diffcoder:8b", "sdar:1.7b", "nemotron:3b"}:
             assert model["verified"] is False, f"{name} listed as verified"
 
 

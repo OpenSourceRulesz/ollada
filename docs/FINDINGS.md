@@ -278,3 +278,52 @@ the noise caveat attached; SDAR's desktop numbers confirm its T4
 numbers transfer. What it does not change: the CPU story (§7) stands
 as written, and the pending SDPA experiment (laptop, §7's speed
 baseline) is still unrun.
+
+## 9. Addendum (2026-10-26): Nemotron-3B on CPU — NVIDIA joins the shelf
+
+The shelf's fifth model, and its second CPU-verified entry. The run that
+earned it was on a laptop (Intel Core Ultra 7 365, 8 cores, 32 GB RAM,
+Windows 11; CPU only, bf16) through ollada's own adapter in an isolated
+nemotron worker environment — not the desktop GPU run the probe sheet
+originally specified, because the desktop path did not exist on that
+machine and the laptop run answered the harder question anyway.
+
+- **The pin is the story.** The first load failed at model-code import:
+  NVIDIA's vendored `modeling_ministral.py` imports `check_model_inputs`
+  from `transformers.utils.generic`, which transformers 5.3.0 removed
+  (the pin borrowed from the diffcoder env). Reading the actual wheels
+  settled it: 4.57.6 defines the symbol, 5.3.0 lacks it, 5.20.2 restores
+  it as a backward-compat shim. The recipe pins `==5.20.2`. NVIDIA's
+  card floor (`transformers>=5.0.0`) is necessary but not sufficient —
+  5.3.0 satisfies it and breaks. The remaining load warnings (rope
+  FutureWarning, an unrecognized `llama_4_scaling_beta` yarn key, a
+  `cache_position` docstring lint, the shim's own deprecation notice)
+  are noise; the run works through all of them.
+- **Fixed prompt set, all correct, at recipe defaults** (times include
+  cold load per CLI run): capital exactly "Paris" (17.9s), train
+  90 km/h with clean working, run twice with identical text (62.1s,
+  57.3s), Fibonacci iterative and correct (19.0s).
+- **Mini code eval, 11/12** (`scripts/mini_code_eval.py`: 12 easy
+  HumanEval-style tasks x sdar:1.7b, sdar:4b, nemotron:3b, fresh CLI
+  runs). Totals: sdar:1.7b 10/12, sdar:4b 11/12, nemotron:3b 11/12.
+  Nemotron's miss was count_vowels, which produced no callable
+  function — a format miss, not a wrong answer. Its bright spot is the
+  one task both SDARs failed, merge_dicts_sum, which it passed. Speed
+  is a wash at the median (nemotron 26.3s, sdar:4b 25.3s per task).
+  The shelf decision was contested in the open: the pre-registered
+  rule (beat sdar:4b by 3+ tasks or sweep a category) said stay out,
+  and the tie said the same. The case that carried it in was not the
+  eval but the shelf as a whole: quality parity with the best model,
+  proven fallback diversity, CPU depth for the mass-market audience,
+  and the shelf's first industry-lab name — NVIDIA recognition is a
+  real adoption axis no other shelf model has. The count_vowels miss
+  stays on the record, not hidden.
+- **What this run corrects.** A secondary source claimed CUDA-capable
+  GPU hardware is required for this model. It loads and answers on a
+  CPU-only laptop. The claim is contradicted by measurement.
+- **What it does not claim.** No GPU verification has been run for
+  this model (the desktop pass never happened), no VRAM peak and no
+  host-RAM peak were recorded (the CPU run records neither), and no
+  tok/s figure is published (times, not token counts, were recorded).
+  The recipe's `min_host_ram_gb` of 16 is a prudent floor from the
+  7.66 GB weights plus runtime, not a measurement.
