@@ -55,8 +55,14 @@ def client(monkeypatch):
 
 def test_health_and_tags(client):
     assert client.get("/health").json()["status"] == "ok"
-    names = {m["name"] for m in client.get("/api/tags").json()["models"]}
-    assert names == {"dream:7b", "sdar:4b", "diffcoder:8b", "sdar:1.7b"}
+    models = {m["name"]: m for m in client.get("/api/tags").json()["models"]}
+    # The verified shelf must all be present; anything else listed must
+    # be UNVERIFIED (a test recipe like nemotron:3b) — listable, but
+    # never presented as verified.
+    assert {"dream:7b", "sdar:4b", "diffcoder:8b", "sdar:1.7b"} <= set(models)
+    for name, model in models.items():
+        if name not in {"dream:7b", "sdar:4b", "diffcoder:8b", "sdar:1.7b"}:
+            assert model["verified"] is False, f"{name} listed as verified"
 
 
 def test_ollama_shaped_chat(client):

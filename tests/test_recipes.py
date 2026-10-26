@@ -5,11 +5,22 @@ from ollada.recipes import RecipeError, get_recipe, load_catalog, validate_recip
 EXPECTED_SHELF = {"dream:7b", "sdar:4b", "diffcoder:8b", "sdar:1.7b"}
 
 
-def test_shelf_has_exactly_the_expected_models():
+def test_shelf_verified_models_present_and_extras_unverified():
     # The MVP three (T4-verified) plus sdar:1.7b, added 2026-10-23 as
     # the CPU tier's first entry (laptop-CPU-verified, see its recipe).
-    names = {r.name for r in load_catalog()}
-    assert names == EXPECTED_SHELF
+    # The verified shelf must all be present; anything else in the
+    # catalog must be UNVERIFIED — a test recipe like nemotron:3b
+    # (added 2026-10-26 for a desktop first-load run) joins the shelf
+    # only by earning a verification block, never by landing in the
+    # catalog.
+    recipes = {r.name: r for r in load_catalog()}
+    assert EXPECTED_SHELF <= set(recipes)
+    for name, recipe in recipes.items():
+        if name not in EXPECTED_SHELF:
+            assert not recipe.is_verified, (
+                f"{name} is not on the verified shelf but carries a "
+                "verification block"
+            )
 
 
 def test_every_recipe_is_wellformed():
