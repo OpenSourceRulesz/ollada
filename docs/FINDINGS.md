@@ -327,3 +327,15 @@ machine and the laptop run answered the harder question anyway.
   tok/s figure is published (times, not token counts, were recorded).
   The recipe's `min_host_ram_gb` of 16 is a prudent floor from the
   7.66 GB weights plus runtime, not a measurement.
+
+- **Speed, measured properly at last.** The CLI runs recorded times but
+  no token counts, so no tok/s figure was published for this model.
+  The server route supplies both: fib via `/api/chat` on the laptop
+  returned eval_count 43, eval_duration_s 5.355 — 8.0 answer tok/s,
+  nfe 8. Two things matter here. First, 5.355s is generation time; the
+  CLI's 19.0s for the same prompt was mostly load, so repeated use
+  (server, REPL) feels much faster than one-shot CLI runs. Second,
+  43 is answer tokens, not the 256-token canvas, so 8.0 is answer
+  tok/s and is NOT comparable to the site's canvas tok/s figures for
+  the other models — it is recorded here, not in the site's Speed
+  column, for exactly that reason.
