@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ollada"
-version = "0.2.0"
+version = "0.3.0"
 description = "The shelf for open-source diffusion language models — pull, run, and serve dLLMs locally, Ollama-style."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -32,6 +32,7 @@ dev = ["pytest"]
 
 [project.urls]
 Homepage = "https://github.com/OpenSourceRulesz/ollada"
+Documentation = "https://opensourcerulesz.github.io/ollada"
 Repository = "https://github.com/OpenSourceRulesz/ollada"
 
 [project.scripts]
