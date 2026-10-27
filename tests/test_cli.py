@@ -119,40 +119,53 @@ def test_canvas_watch_draws_frames_and_finishes_clean():
 
     out = "".join(stream.writes)
     assert "The" in out and "cat" in out and "░" in out
-    assert "block 1/4" in out
-    assert "\033[" in out  # ANSI redraw/clear sequences were used
+    # No counter line, and no cursor-up sequence anywhere: the
+    # single-line renderer is the whole VS Code fix.
+    assert "block " not in out
+    assert "step " not in out
+    import re
+
+    assert re.search(r"\033\[\d+A", out) is None
+    assert "\033[2K" in out  # single-row clear sequences were used
     assert watch._lines == 0 and watch._started is False
 
 
-def test_canvas_watch_clears_rows_when_frame_shrinks():
+def test_canvas_watch_never_moves_cursor_up_and_clears_one_row():
     from ollada.cli import _CanvasWatch
 
     stream = _FakeStream(tty=True)
     watch = _CanvasWatch(stream=stream)
-    watch._draw(["aaaa", "bbbb", "cccc", "block 1/4 · step 1/4"])
-    assert watch._lines == 4
+    watch._draw("aaaa bbbb cccc")
+    assert watch._lines == 1
     stream.writes.clear()
-    watch._draw(["short", "block 1/4 · step 2/4"])
+    watch._draw("short")
     out = "".join(stream.writes)
-    assert "\033[4A" in out  # moved up over the tall previous frame
-    # 2 rewritten rows + 2 cleared leftover rows, then back up 2.
-    assert out.count("\033[2K") == 4
-    assert "\033[2A" in out
-    assert watch._lines == 2
+    import re
+
+    assert re.search(r"\033\[\d+A", out) is None
+    assert out == "\r\033[2Kshort"
+    stream.writes.clear()
+    watch.finish()
+    assert "".join(stream.writes) == "\r\033[2K\r"
+    assert watch._lines == 0
 
 
-def test_canvas_watch_growing_frame_clears_nothing_extra():
+def test_canvas_watch_window_follows_the_frontier():
     from ollada.cli import _CanvasWatch
 
     stream = _FakeStream(tty=True)
     watch = _CanvasWatch(stream=stream)
-    watch._draw(["one", "block 1/4 · step 1/4"])
-    stream.writes.clear()
-    watch._draw(["a", "b", "c", "block 1/4 · step 2/4"])
-    out = "".join(stream.writes)
-    assert "\033[2A" in out  # moved up over the short previous frame
-    assert out.count("\033[2K") == 4  # exactly the 4 rewritten rows
-    assert watch._lines == 4
+    # 200 committed chars, then a tentative guess: the window must
+    # show the frontier, not just the head of the canvas, and must
+    # fit in one terminal row (no newline in the frame).
+    pieces = [("x" * 200, "done"), (" new", "tent"), ("", "mask")]
+    line = watch._render(pieces, 40)
+    assert "new" in line
+    assert "\n" not in line
+    import re
+
+    plain = re.sub(r"\033\[[0-9;]*m", "", line)
+    assert len(plain) <= 40
 
 
 def test_canvas_watch_width_prefers_its_own_stream_fd(monkeypatch):

@@ -109,17 +109,27 @@ class _CanvasWatch:
     The renderer for watch-capable adapters' per-step frames (see
     adapters/sdar.py): committed tokens print plain, the model's
     current guess at a still-masked position prints dim, and an
-    untouched position prints as ░. Frames redraw in place on stderr
-    (the answer itself is printed clean on stdout afterwards, exactly
-    as without watch mode), throttled so a fast GPU cadence drops
-    frames instead of ever slowing the model. finish() erases the
-    canvas so the final text lands on a clean terminal.
+    untouched position prints as ░. The answer itself is printed
+    clean on stdout afterwards, exactly as without watch mode, and
+    frames are throttled so a fast GPU cadence drops frames instead
+    of ever slowing the model.
 
-    Redraw contract, learned from a smeared Dell run: a frame always
-    occupies exactly self._lines terminal rows. _draw clears rows a
-    shorter frame leaves behind, and the wrap width is measured on the
-    watch's own stream — shutil's width comes from stdout, which is
-    wrong whenever stdout is piped while stderr stays a terminal.
+    Single-line contract (2026-10-27, after the VS Code smear):
+    the previous multi-line in-place renderer moved the cursor up
+    over a wrapped canvas and cleared rows it had miscounted, and
+    two fixes to that logic (shrink-clear, stream-measured width)
+    did not move the symptom in VS Code's terminal — its screenshot
+    showed only the status lines surviving below the prompt, in
+    reverse block order, after the answer had printed. So this
+    renderer never moves the cursor up, never prints a newline, and
+    never shows a block/step counter. Each frame is exactly one
+    terminal row, truncated to the measured width, rewritten with
+    \\r + clear-line; finish() clears that one row. A one-row
+    rewrite cannot leave multi-row residue, whatever the terminal
+    does with wrapped lines, because no wrapped line is ever drawn.
+    The window follows the frontier (the first not-yet-committed
+    position), showing the last committed words plus the current
+    guess — the diffusion effect, in one row.
     """
 
     _MIN_FRAME_SECONDS = 0.12
@@ -129,7 +139,7 @@ class _CanvasWatch:
 
     def __init__(self, stream=None):
         self._stream = stream if stream is not None else sys.stderr
-        self._lines = 0
+        self._lines = 0  # 1 while a frame is on screen, 0 otherwise
         self._last_draw = 0.0
         self._started = False
         # Set by the caller: invoked once, just before the first
@@ -137,13 +147,12 @@ class _CanvasWatch:
         self.on_first_frame = None
 
     def _width(self) -> int:
-        """Wrap width, measured on the watch's own stream.
+        """Row width, measured on the watch's own stream.
 
         shutil.get_terminal_size() measures stdout, but the watch
         writes to stderr — when stdout is piped (to capture the
-        answer) its width comes back wrong, wrapped rows miscount,
-        and every redraw lands in the wrong place. A stream with a
-        tty fd gives the true width; anything else falls back.
+        answer) its width comes back wrong. A stream with a tty fd
+        gives the true width; anything else falls back.
         """
         try:
             fd = self._stream.fileno()
@@ -157,6 +166,9 @@ class _CanvasWatch:
         return max(40, shutil.get_terminal_size().columns - 1)
 
     def __call__(self, pieces, block_i, num_blocks, step_i, steps):
+        # block_i/num_blocks/step_i/steps are the adapter's frame
+        # identity, accepted for interface compatibility and
+        # deliberately not shown: no counter line, by design.
         now = time.monotonic()
         if self._started and now - self._last_draw < self._MIN_FRAME_SECONDS:
             return
@@ -165,92 +177,66 @@ class _CanvasWatch:
             if self.on_first_frame is not None:
                 self.on_first_frame()
         self._last_draw = now
-        width = self._width()
-        lines = self._compose(pieces, width)
-        lines.append(
-            f"block {block_i + 1}/{num_blocks} · step {min(step_i + 1, steps)}/{steps}"
-        )
-        self._draw(lines)
+        self._draw(self._render(pieces, self._width()))
 
-    def _compose(self, pieces, width):
-        # Flatten to styled chunks, then wrap by display width,
-        # breaking between chunks where possible. A chunk carries
-        # (style_prefix, text); unstyled chunks use "".
-        chunks = []
+    def _render(self, pieces, width):
+        # Flatten to (text, style) segments; a masked position is
+        # one ░, a newline in a token becomes a space (the preview
+        # is one row; the final answer keeps its newlines).
+        segments = []
+        done_len = 0
         for text, state in pieces:
             if state == "done":
-                chunks.append(("", text))
+                clean = text.replace("\n", " ")
+                segments.append((clean, ""))
+                done_len += len(clean)
             elif state == "tent":
-                chunks.append((self._DIM, text))
+                segments.append((text.replace("\n", " "), self._DIM))
             else:
-                chunks.append((self._MASK, "░"))
-        lines: list[list[tuple[str, str]]] = [[]]
-        col = 0
-        for style, text in chunks:
-            for k, seg in enumerate(text.split("\n")):
-                if k > 0:
-                    lines.append([])
-                    col = 0
-                if not seg:
-                    continue
-                if col > 0 and col + len(seg) > width:
-                    lines.append([])
-                    col = 0
-                if len(seg) > width and col == 0:
-                    seg = seg[:width]
-                lines[-1].append((style, seg))
-                col += len(seg)
-        rendered = []
-        for line in lines:
-            parts = []
-            for style, seg in line:
-                parts.append(f"{style}{seg}{self._RESET}" if style else seg)
-            rendered.append("".join(parts))
-        return rendered
+                segments.append(("░", self._MASK))
+        total = sum(len(text) for text, _ in segments)
+        # Window around the frontier: 24 committed chars of context,
+        # then the current guess and the masks ahead of it.
+        start = max(0, done_len - 24)
+        prefix = "…" if start > 0 else ""
+        window_len = width - len(prefix)
+        end = min(total, start + window_len)
+        suffix = "…" if end < total else ""
+        if suffix:
+            window_len -= 1
+            end = start + window_len
+        parts = []
+        pos = 0
+        for text, style in segments:
+            seg_end = pos + len(text)
+            if seg_end <= start or pos >= end:
+                pos = seg_end
+                continue
+            lo = max(start, pos) - pos
+            hi = min(end, seg_end) - pos
+            chunk = text[lo:hi]
+            parts.append(f"{style}{chunk}{self._RESET}" if style else chunk)
+            pos = seg_end
+        return prefix + "".join(parts) + suffix
 
-    def _draw(self, lines):
-        out = []
-        prev = self._lines
-        if prev:
-            out.append(f"\033[{prev}A")
-        for i, line in enumerate(lines):
-            out.append("\r\033[2K" + line)
-            if i < len(lines) - 1:
-                out.append("\n")
-        # A shorter frame leaves the previous frame's bottom rows on
-        # screen: clear them, then move back up to the new last row.
-        # Without this, a shrinking canvas (committed text replacing
-        # a taller masked canvas, or a short answer after a long one)
-        # leaves residue lines behind — the smearing the Dell run
-        # showed, where only status lines survived visibly.
-        extra = prev - len(lines)
-        for _ in range(max(0, extra)):
-            out.append("\n\r\033[2K")
-        if extra > 0:
-            out.append(f"\033[{extra}A")
+    def _draw(self, line):
+        # One row only: carriage return to its start, clear the
+        # whole row (so a shorter frame leaves nothing behind),
+        # then the new frame. No cursor-up, no newline.
         try:
-            self._stream.write("".join(out))
+            self._stream.write("\r\033[2K" + line)
             self._stream.flush()
         except Exception:
             pass
-        self._lines = len(lines)
+        self._lines = 1
 
     def finish(self):
-        """Erase the canvas; the caller prints the final answer next.
-        Resets for the next chat turn (the REPL reuses one watch)."""
+        """Erase the single watch row; the caller prints the final
+        answer next. Resets for the next chat turn (the REPL reuses
+        one watch)."""
         if self._lines:
-            out = []
-            if self._lines > 1:
-                out.append(f"\033[{self._lines - 1}A")
-            for i in range(self._lines):
-                out.append("\r\033[2K")
-                if i < self._lines - 1:
-                    out.append("\n")
-            if self._lines > 1:
-                out.append(f"\033[{self._lines - 1}A")
-            out.append("\r")
             try:
-                self._stream.write("".join(out))
+                self._stream.write("\r\033[2K\r")
                 self._stream.flush()
             except Exception:
                 pass
@@ -340,17 +326,16 @@ def _cmd_run(args) -> int:
     def _overrides() -> dict | None:
         return {"gen_length": session_length} if session_length else None
 
-    # Watch mode is opt-in (OLLADA_WATCH=1). The live canvas is a nice
-    # effect, but its in-place ANSI redraw proved unreliable in VS
-    # Code's terminal: frames survived below the prompt after the run
-    # ended, and two redraw fixes (shrink-clear, stream-measured width)
-    # did not change the symptom — the foreground byte stream replays
-    # clean in a terminal emulator, so the residue comes from outside
-    # the run (a stale process on the terminal, or the terminal
-    # replaying buffered frames late). Default runs stay clean
-    # (spinner + answer); OLLADA_NO_WATCH still forces it off.
+    # Watch is the default on an interactive terminal: the live
+    # canvas is the diffusion effect, and the single-line renderer
+    # in _CanvasWatch cannot smear the way the old multi-line
+    # redraw did in VS Code's terminal. OLLADA_NO_WATCH opts out
+    # (spinner + answer, as before); OLLADA_WATCH=1 is still
+    # accepted and is now a no-op. Piped output stays clean:
+    # the watch only starts when stderr is a tty, and only
+    # watch-capable adapters (SDAR) ever receive its frames.
     watch = None
-    if "OLLADA_WATCH" in os.environ and "OLLADA_NO_WATCH" not in os.environ:
+    if "OLLADA_NO_WATCH" not in os.environ:
         try:
             if sys.stderr.isatty():
                 watch = _CanvasWatch()
