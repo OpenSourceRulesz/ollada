@@ -421,7 +421,7 @@ export default function App() {
           <h2>Ground rules</h2>
           <dl>
             <dt>Free and local</dt><dd>No telemetry, no phone-home, no paid services. MIT licensed.</dd>
-            <dt>Honest about hardware</dt><dd>Dream and DiffCoder need a GPU. The SDAR models also run on a CPU: seconds for short answers on the 1.7B, minutes for long ones on the 4B.</dd>
+            <dt>Honest about hardware</dt><dd>Dream and DiffCoder need a GPU. The SDAR models and Nemotron run on a laptop CPU — slower, but no GPU required.</dd>
             <dt>Our numbers only</dt><dd>Vendor benchmarks are never shown as Ollada measurements.</dd>
           </dl>
         </section>
