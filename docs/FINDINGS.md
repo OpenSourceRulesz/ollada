@@ -425,8 +425,11 @@ machine and the laptop run answered the harder question anyway.
   transformers 5.21.0 confirmed in the venv): capital answered "The
   capital of France is Paris.", 38.1s (warm). Both through the real
   adapter and worker path. The installed-path test used the
-  working-tree 0.3.1+fix; the public-index proof comes with the
-  0.3.2 release smoke.
+  working-tree 0.3.1+fix; the public-index proof came with the
+  0.3.2 release smoke: fresh venv, `pip install "ollada[cpu]==0.3.2"`
+  from PyPI (manager transformers 5.21.0), capital answered "The
+  capital of France is Paris.", 30.1s — the guide path that failed
+  twice on 0.3.1 now passes from the public index.
 - **What it does not claim.** The fix covers the worker path only.
   The in-process debug path (`OLLADA_INPROCESS=1`) still loads
   adapters in the manager process with the manager venv's
