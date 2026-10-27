@@ -31,6 +31,8 @@ h1{margin:0 0 22px;font-weight:600;font-size:clamp(2.5rem,8vw,5.4rem);line-heigh
 .hero details{max-width:620px;margin-top:14px}
 .hero details summary{cursor:pointer;font-weight:500}
 .hero details summary::marker{color:var(--muted)}
+.hero details dl{grid-template-columns:1fr;gap:4px}
+.hero details dd{margin-bottom:18px}
 code{font:400 .88em var(--mono);background:var(--panel);padding:1px 5px;border-radius:3px}
 section{padding:56px 0;border-top:1px solid var(--line)}
 h2{margin:0 0 10px;font-weight:600;font-size:clamp(1.6rem,3.6vw,2.2rem);letter-spacing:-.03em;line-height:1.15}
