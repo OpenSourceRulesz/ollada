@@ -150,6 +150,19 @@ def test_canvas_watch_never_moves_cursor_up_and_clears_one_row():
     assert watch._lines == 0
 
 
+def test_canvas_watch_caps_trailing_mask_run():
+    from ollada.cli import _CanvasWatch
+
+    stream = _FakeStream(tty=True)
+    watch = _CanvasWatch(stream=stream)
+    # A mostly-masked canvas must not fill the row with ░: at
+    # most 20 masks, plus the "…" that says more canvas remains.
+    pieces = [("Hello world", "done")] + [("", "mask")] * 100
+    line = watch._render(pieces, 80)
+    assert line.count("░") == 20
+    assert line.endswith("…")
+
+
 def test_canvas_watch_window_follows_the_frontier():
     from ollada.cli import _CanvasWatch
 

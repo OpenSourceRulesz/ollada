@@ -129,10 +129,16 @@ class _CanvasWatch:
     does with wrapped lines, because no wrapped line is ever drawn.
     The window follows the frontier (the first not-yet-committed
     position), showing the last committed words plus the current
-    guess — the diffusion effect, in one row.
+    guess — the diffusion effect, in one row. The trailing mask
+    run is capped at 20 ░: uncapped, a mostly-masked 128-token
+    canvas fills the whole row with ░ and reads as a loading
+    bar, not as writing (seen in a 2026-10-27 VS Code video).
+    The "…" suffix already signals more canvas ahead, so the
+    cap loses no information about progress.
     """
 
     _MIN_FRAME_SECONDS = 0.12
+    _MAX_MASKS = 20
     _DIM = "\033[2m"
     _MASK = "\033[90m"
     _RESET = "\033[0m"
@@ -217,6 +223,20 @@ class _CanvasWatch:
             chunk = text[lo:hi]
             parts.append(f"{style}{chunk}{self._RESET}" if style else chunk)
             pos = seg_end
+        # Cap the trailing mask run (see class docstring): each
+        # masked position is its own styled part, so count the
+        # trailing mask parts and keep at most _MAX_MASKS of them.
+        # The suffix "…" (present whenever more canvas remains)
+        # already says the canvas continues past the cap.
+        mask_part = f"{self._MASK}░{self._RESET}"
+        trailing = 0
+        for part in reversed(parts):
+            if part == mask_part:
+                trailing += 1
+            else:
+                break
+        if trailing > self._MAX_MASKS:
+            parts = parts[: len(parts) - (trailing - self._MAX_MASKS)]
         return prefix + "".join(parts) + suffix
 
     def _draw(self, line):
