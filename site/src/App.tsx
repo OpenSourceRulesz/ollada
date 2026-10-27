@@ -327,6 +327,8 @@ function Api() {
 /* ---------- how to install (guided path; the hero box is the quick path) ---------- */
 const VENV = `python3 -m venv ~/.ollada-venv
 source ~/.ollada-venv/bin/activate`;
+const VENV_PS = `py -m venv $HOME\\.ollada-venv
+& $HOME\\.ollada-venv\\Scripts\\Activate.ps1`;
 const FIRSTRUN = `pip install "ollada[cpu]"
 ollada pull sdar:1.7b
 ollada run sdar:1.7b`;
@@ -344,9 +346,11 @@ The Python that ships with a Mac is 3.9 — too old. Get a current one from pyth
 Mac: Terminal (Applications → Utilities, or Spotlight → Terminal). Windows: PowerShell or Terminal. Linux: your terminal.
 
 3. Make a virtual environment
-Modern Python refuses to install packages globally, so ollada lives in its own folder. One command to make it, one to switch into it:
+Modern Python refuses to install packages globally, so ollada lives in its own folder. Run ONLY the block for your system — one command to make it, one to switch into it:
+Mac / Linux:
 ${VENV}
-Windows PowerShell instead: py -m venv $HOME\\.ollada-venv, then & $HOME\\.ollada-venv\\Scripts\\Activate.ps1
+Windows PowerShell:
+${VENV_PS}
 If PowerShell refuses to run it, run: Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 first, then activate again.
 
@@ -397,9 +401,12 @@ function InstallGuide() {
         <dt>2. Open a terminal</dt>
         <dd>Mac: Terminal (Applications → Utilities, or Spotlight → Terminal). Windows: PowerShell or Terminal. Linux: your terminal.</dd>
         <dt>3. Make a virtual environment</dt>
-        <dd>Modern Python refuses to install packages globally, so ollada lives in its own folder. One command to make it, one to switch into it:
+        <dd>Modern Python refuses to install packages globally, so ollada lives in its own folder. Run ONLY the block for your system — one command to make it, one to switch into it:
+          <p>Mac / Linux:</p>
           <pre className="code">{VENV}</pre>
-          <span className="fine">Windows PowerShell instead: <code>py -m venv $HOME\.ollada-venv</code>, then <code>&amp; $HOME\.ollada-venv\Scripts\Activate.ps1</code>. If PowerShell refuses to run it, run <code>Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass</code> first, then activate again.</span>
+          <p>Windows PowerShell:</p>
+          <pre className="code">{VENV_PS}</pre>
+          <p>If PowerShell refuses to run it, run <code>Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass</code> first, then activate again.</p>
         </dd>
         <dt>4. Install and run</dt>
         <dd>Laptop without a GPU — the try-first path:
