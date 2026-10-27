@@ -402,9 +402,9 @@ function InstallGuide() {
         <dd>Mac: Terminal (Applications → Utilities, or Spotlight → Terminal). Windows: PowerShell or Terminal. Linux: your terminal.</dd>
         <dt>3. Make a virtual environment</dt>
         <dd>Modern Python refuses to install packages globally, so ollada lives in its own folder. Run ONLY the block for your system — one command to make it, one to switch into it:
-          <p>Mac / Linux:</p>
+          <p><strong>Mac / Linux:</strong></p>
           <pre className="code">{VENV}</pre>
-          <p>Windows PowerShell:</p>
+          <p><strong>Windows PowerShell:</strong></p>
           <pre className="code">{VENV_PS}</pre>
           <p>If PowerShell refuses to run it, run <code>Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass</code> first, then activate again.</p>
         </dd>

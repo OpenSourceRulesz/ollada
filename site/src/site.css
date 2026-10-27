@@ -33,6 +33,7 @@ h1{margin:0 0 22px;font-weight:600;font-size:clamp(2.5rem,8vw,5.4rem);line-heigh
 .hero details summary::marker{color:var(--muted)}
 .hero details dl{grid-template-columns:1fr;gap:4px}
 .hero details dd{margin-bottom:18px}
+.hero details dd strong{color:var(--ink);font-weight:700}
 .hero details p.fine + dl{margin-top:28px}
 code{font:400 .88em var(--mono);background:var(--panel);padding:1px 5px;border-radius:3px}
 section{padding:56px 0;border-top:1px solid var(--line)}
