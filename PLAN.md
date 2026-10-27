@@ -3,6 +3,8 @@
 **Status:** Plan v1.2 — 2026-10-21 — **BUILD STARTED** at Dallas's go (3-model shelf with the Nemotron swap, §5). **Name CLAIMED on GitHub + PyPI**: github.com/OpenSourceRulesz/ollada created + pushed; Dallas registered the PyPI pending trusted publisher; tag v0.0.1 pushed — note the tag push never triggered the workflow (0 runs; cause undetermined), so the publish ran via manual `workflow_dispatch` from main after the version-check step was made tag-only; run 39617965181 succeeded; `pip install ollada` (0.0.1) verified from a fresh venv AND via `pip download --no-cache-dir`; PyPI JSON API returns 200 (its initial 404 was CDN negative-caching from the pre-claim checks). Runtime build still awaits the remaining plan decisions.
 **Cost rule:** $0 project (same as FFTP / PrivateContext). No domain, no telemetry, no paid services. Gemini free tier only if ever needed. Nothing public without per-item approval (draft → review → agree → post).
 
+**Status note — 2026-10-26:** This plan (v1.2, 2026-10-21) is now a historical record; the dated annotations below are how it tracked progress. Since v1.2: 0.3.0 shipped (per-family worker environments merged to main); the shelf is five models (nemotron:3b and sdar:1.7b added, both CPU-verified); the catalog page exists (site + docs/LIBRARY.md); desktop verification on the RTX 5060 Ti is done (FINDINGS §8); the SDPA experiment ran and closed (eager flex stays the default); CPU support is in scope; the §7 gate admits CPU verification; and the zero-assumed-knowledge install walkthrough promised in Phase 3 is now the site's 'How to install' section.
+
 ---
 
 ## 1. The insight this is built on

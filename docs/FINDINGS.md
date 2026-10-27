@@ -279,6 +279,8 @@ numbers transfer. What it does not change: the CPU story (§7) stands
 as written, and the pending SDPA experiment (laptop, §7's speed
 baseline) is still unrun.
 
+**Correction (2026-10-26).** Two lines in this addendum are stale as of this writing: the worker environments were merged to main on 2026-10-25 and shipped in 0.3.0 on 2026-10-26, and the SDPA experiment ran on 2026-10-25 — SDPA did not win on CPU (fib 89% slower), so eager flex stays the default. The desktop numbers above stand.
+
 ## 9. Addendum (2026-10-26): Nemotron-3B on CPU — NVIDIA joins the shelf
 
 The shelf's fifth model, and its second CPU-verified entry. The run that
