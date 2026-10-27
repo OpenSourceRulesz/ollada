@@ -337,7 +337,7 @@ New to Python? Step-by-step setup
 Three things before the three commands: Python, a terminal, and a virtual environment. Five minutes once, then the quick commands just work.
 
 1. Check Python
-You need Python 3.10 or newer. Check with: python3 --version
+You need Python 3.10 or newer. Check with: python3 --version (Mac/Linux) or py --version (Windows)
 The Python that ships with a Mac is 3.9 — too old. Get a current one from python.org/downloads. On Windows, tick 'Add python.exe to PATH' during install.
 
 2. Open a terminal
@@ -346,7 +346,7 @@ Mac: Terminal (Applications → Utilities, or Spotlight → Terminal). Windows: 
 3. Make a virtual environment
 Modern Python refuses to install packages globally, so ollada lives in its own folder. One command to make it, one to switch into it:
 ${VENV}
-Windows PowerShell instead: ~\\.ollada-venv\\Scripts\\Activate.ps1
+Windows PowerShell instead: py -m venv $HOME\\.ollada-venv, then & $HOME\\.ollada-venv\\Scripts\\Activate.ps1
 If PowerShell refuses to run it, run: Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 first, then activate again.
 
@@ -360,6 +360,7 @@ What to expect: the first run is slow twice — the model download (about 4 GB f
 
 If it fails:
 command not found: pip or python3 — Python isn't installed or isn't on PATH. See step 1.
+Python was not found; run without arguments to install from the Microsoft Store — that's the Windows stub, not real Python. Install from python.org/downloads and tick 'Add python.exe to PATH', then check with py --version. See step 1.
 externally managed environment — you're not inside a virtual environment. See step 3.
 requires Python >= 3.10 — your Python is too old. See step 1.
 Anything else — copy the whole error; that's what's needed to help.`;
@@ -392,13 +393,13 @@ function InstallGuide() {
       <p className="sub">Three things before the three commands: Python, a terminal, and a virtual environment. Five minutes once, then the quick commands above just work.</p>
       <dl>
         <dt>1. Check Python</dt>
-        <dd>You need Python 3.10 or newer. Check with <code>python3 --version</code>. The Python that ships with a Mac is 3.9 — too old. Get a current one from python.org/downloads. On Windows, tick ‘Add python.exe to PATH’ during install.</dd>
+        <dd>You need Python 3.10 or newer. Check with <code>python3 --version</code> on Mac/Linux, <code>py --version</code> on Windows. The Python that ships with a Mac is 3.9 — too old. Get a current one from python.org/downloads. On Windows, tick ‘Add python.exe to PATH’ during install.</dd>
         <dt>2. Open a terminal</dt>
         <dd>Mac: Terminal (Applications → Utilities, or Spotlight → Terminal). Windows: PowerShell or Terminal. Linux: your terminal.</dd>
         <dt>3. Make a virtual environment</dt>
         <dd>Modern Python refuses to install packages globally, so ollada lives in its own folder. One command to make it, one to switch into it:
           <pre className="code">{VENV}</pre>
-          <span className="fine">Windows PowerShell instead: <code>~\.ollada-venv\Scripts\Activate.ps1</code>. If PowerShell refuses to run it, run <code>Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass</code> first, then activate again.</span>
+          <span className="fine">Windows PowerShell instead: <code>py -m venv $HOME\.ollada-venv</code>, then <code>&amp; $HOME\.ollada-venv\Scripts\Activate.ps1</code>. If PowerShell refuses to run it, run <code>Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass</code> first, then activate again.</span>
         </dd>
         <dt>4. Install and run</dt>
         <dd>Laptop without a GPU — the try-first path:
@@ -409,7 +410,7 @@ function InstallGuide() {
       <p className="fine">What to expect: the first run is slow twice — the model download (about 4 GB for sdar:1.7b) and a one-time worker-environment build (torch plus transformers, a few hundred MB). Later runs skip both. On CPU, short answers take seconds, long ones up to a minute.</p>
       <dl>
         <dt>If it fails</dt>
-        <dd><code>command not found: pip</code> or <code>python3</code> — Python isn’t installed or isn’t on PATH. See step 1. <code>externally managed environment</code> — you’re not inside a virtual environment. See step 3. <code>requires Python &gt;= 3.10</code> — your Python is too old. See step 1. Anything else — copy the whole error; that’s what’s needed to help.</dd>
+        <dd><code>command not found: pip</code> or <code>python3</code> — Python isn’t installed or isn’t on PATH. See step 1. <code>Python was not found … Microsoft Store</code> — that’s the Windows stub, not real Python. Install from python.org/downloads. See step 1. <code>externally managed environment</code> — you’re not inside a virtual environment. See step 3. <code>requires Python &gt;= 3.10</code> — your Python is too old. See step 1. Anything else — copy the whole error; that’s what’s needed to help.</dd>
       </dl>
     </details>
   );
