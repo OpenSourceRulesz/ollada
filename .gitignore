@@ -3,5 +3,4 @@ __pycache__/
 dist/
 *.egg-info/
 
-# generated site (scripts/build_site.py output; deployed from gh-pages)
-site/
+# site/ is the homepage source (React); see site/README.md
