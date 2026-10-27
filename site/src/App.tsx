@@ -444,35 +444,6 @@ function InstallGuide() {
   );
 }
 
-/* Header theme toggle: stored choice wins, otherwise the system
-   setting (today's behavior). Lives outside the burger nav so it
-   stays visible on mobile. The .term demo box keeps its own dark
-   styling and is untouched by the theme. */
-function ThemeToggle() {
-  const [theme, setTheme] = useState<"light" | "dark">(() => {
-    try {
-      const stored = localStorage.getItem("ollada-theme");
-      if (stored === "light" || stored === "dark") return stored;
-    } catch {}
-    try {
-      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    } catch {
-      return "light";
-    }
-  });
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    try {
-      localStorage.setItem("ollada-theme", theme);
-    } catch {}
-  }, [theme]);
-  const next = theme === "dark" ? "light" : "dark";
-  return (
-    <button className="themebtn" aria-label={`Switch to ${next} theme`} onClick={() => setTheme(next)}>
-      {theme === "dark" ? "☀" : "☾"}
-    </button>
-  );
-}
 export default function App() {
   return (
     <div className="wrap">
@@ -483,7 +454,6 @@ export default function App() {
           </svg>
           Ollada
         </a>
-        <ThemeToggle />
         <NavMenu />
       </header>
       <main id="top">

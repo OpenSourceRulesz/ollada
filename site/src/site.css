@@ -1,13 +1,9 @@
-:root{--bg:#F5F5FB;--ink:#1A1B2E;--muted:#5E6078;--line:#DCDDEE;--accent:#6C6FD8;--link:#4B4EBF;--mask:#D3D4F0;--panel:#ECECF7;--ok:#1C7A4B;--warn:#955D00;--bad:#B3321F;
+/* Forced dark, by Dallas's call 2026-10-27: the emoji toggle was
+   rejected, so there is no theme switch at all — no light mode,
+   no system following, just the dark palette the site was already
+   photographed in. .term was already dark and is unchanged. */
+:root{--bg:#12131F;--ink:#E9EAF6;--muted:#A0A3C0;--line:#2B2D45;--accent:#6C6FD8;--link:#8E91EA;--mask:#2C2E52;--panel:#1B1C2D;--ok:#58C48C;--warn:#E3B04B;--bad:#FF8A78;
 --sans:"Geist",ui-sans-serif,system-ui,sans-serif;--mono:"Geist Mono",ui-monospace,Menlo,Consolas,monospace}
-@media (prefers-color-scheme:dark){:root{--bg:#12131F;--ink:#E9EAF6;--muted:#A0A3C0;--line:#2B2D45;--link:#8E91EA;--mask:#2C2E52;--panel:#1B1C2D;--ok:#58C48C;--warn:#E3B04B;--bad:#FF8A78}}
-/* Manual theme override (header toggle, persisted in localStorage).
-   These sit after the media query so a stored choice wins over the
-   system setting; without a data-theme attribute the system rule
-   above still applies. .term stays dark by design, untouched here. */
-:root[data-theme="light"]{--bg:#F5F5FB;--ink:#1A1B2E;--muted:#5E6078;--line:#DCDDEE;--link:#4B4EBF;--mask:#D3D4F0;--panel:#ECECF7;--ok:#1C7A4B;--warn:#955D00;--bad:#B3321F}
-:root[data-theme="dark"]{--bg:#12131F;--ink:#E9EAF6;--muted:#A0A3C0;--line:#2B2D45;--link:#8E91EA;--mask:#2C2E52;--panel:#1B1C2D;--ok:#58C48C;--warn:#E3B04B;--bad:#FF8A78}
-.themebtn{background:none;border:1px solid var(--line);border-radius:8px;color:var(--ink);font-size:1.1rem;line-height:1;padding:7px 10px;cursor:pointer}
 html{scroll-behavior:smooth}
 body{margin:0;background:var(--bg);color:var(--ink);font:400 1.0625rem/1.6 var(--sans)}
 a{color:var(--link);text-underline-offset:3px}
