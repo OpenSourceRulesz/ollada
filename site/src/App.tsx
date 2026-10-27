@@ -368,6 +368,27 @@ Python was not found; run without arguments to install from the Microsoft Store 
 externally managed environment — you're not inside a virtual environment. See step 3.
 requires Python >= 3.10 — your Python is too old. See step 1.
 Anything else — copy the whole error; that's what's needed to help.`;
+/* One command block, in the hero box style, with its own Copy row.
+   Used for the three expander blocks so each copies only itself:
+   copying the whole guide would hand a Windows user the Mac block
+   too. The Copy row sits above the code (not overlaid on it) so
+   it never covers a long line, as the API blocks learned. */
+function CmdBlock({ text }: { text: string }) {
+  const [label, setLabel] = useState("Copy");
+  const copy = () => {
+    navigator.clipboard?.writeText(text).then(
+      () => setLabel("Copied"),
+      () => setLabel("Select and copy")
+    );
+    setTimeout(() => setLabel("Copy"), 1600);
+  };
+  return (
+    <div className="cmdbox">
+      <div className="copyrow"><button className="copy" onClick={copy}>{label}</button></div>
+      <pre className="code">{text}</pre>
+    </div>
+  );
+}
 function InstallGuide() {
   const ref = useRef<HTMLDetailsElement>(null);
   const [copyLabel, setCopyLabel] = useState("Copy instructions");
@@ -403,14 +424,14 @@ function InstallGuide() {
         <dt>3. Make a virtual environment</dt>
         <dd>Modern Python refuses to install packages globally, so ollada lives in its own folder. Run ONLY the block for your system — one command to make it, one to switch into it:
           <p><strong>Mac / Linux:</strong></p>
-          <pre className="code">{VENV}</pre>
+          <CmdBlock text={VENV} />
           <p><strong>Windows PowerShell:</strong></p>
-          <pre className="code">{VENV_PS}</pre>
+          <CmdBlock text={VENV_PS} />
           <p>If PowerShell refuses to run it, run <code>Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass</code> first, then activate again.</p>
         </dd>
         <dt>4. Install and run</dt>
         <dd>Laptop without a GPU — the try-first path:
-          <pre className="code">{FIRSTRUN}</pre>
+          <CmdBlock text={FIRSTRUN} />
           NVIDIA GPU? Same steps with <code>ollada[gpu]</code> instead. At the <code>&gt;&gt;&gt;</code> prompt, ask: What is the capital of France? Answer with exactly one word. Expect Paris. Ctrl-C quits.
         </dd>
       </dl>
@@ -423,6 +444,35 @@ function InstallGuide() {
   );
 }
 
+/* Header theme toggle: stored choice wins, otherwise the system
+   setting (today's behavior). Lives outside the burger nav so it
+   stays visible on mobile. The .term demo box keeps its own dark
+   styling and is untouched by the theme. */
+function ThemeToggle() {
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    try {
+      const stored = localStorage.getItem("ollada-theme");
+      if (stored === "light" || stored === "dark") return stored;
+    } catch {}
+    try {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    } catch {
+      return "light";
+    }
+  });
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    try {
+      localStorage.setItem("ollada-theme", theme);
+    } catch {}
+  }, [theme]);
+  const next = theme === "dark" ? "light" : "dark";
+  return (
+    <button className="themebtn" aria-label={`Switch to ${next} theme`} onClick={() => setTheme(next)}>
+      {theme === "dark" ? "☀" : "☾"}
+    </button>
+  );
+}
 export default function App() {
   return (
     <div className="wrap">
@@ -433,6 +483,7 @@ export default function App() {
           </svg>
           Ollada
         </a>
+        <ThemeToggle />
         <NavMenu />
       </header>
       <main id="top">
