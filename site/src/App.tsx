@@ -462,14 +462,14 @@ export default function App() {
         <section>
           <h2>Ground rules</h2>
           <dl>
-            <dt>Free and local</dt><dd>No telemetry, no phone-home, no paid services. MIT licensed.</dd>
+            <dt>Free and local</dt><dd>Runs entirely on your computer. Ollada doesn't track your usage or send your prompts back to us. No paid services. MIT licensed.</dd>
             <dt>Honest about hardware</dt><dd>Dream and DiffCoder need a GPU. The SDAR models and Nemotron run on a laptop CPU — slower, but no GPU required.</dd>
             <dt>Our numbers only</dt><dd>Vendor benchmarks are never shown as Ollada measurements.</dd>
           </dl>
         </section>
       </main>
       <footer>
-        <p>Version 0.3.0 — five models verified on named hardware. Named the way Ollama was: Ollama ← LLaMA, Ollada ← LLaDA.</p>
+        <p>Version 0.3.2 — five models verified on named hardware. Named the way Ollama was: Ollama ← LLaMA, Ollada ← LLaDA.</p>
         <p><a href="https://github.com/OpenSourceRulesz/ollada">Source</a> · <a href="https://github.com/OpenSourceRulesz/ollada/blob/main/docs/FINDINGS.md">Findings</a> · <a href="https://github.com/OpenSourceRulesz/ollada/blob/main/docs/LIBRARY.md">Library</a> · <a href="https://pypi.org/project/ollada/">PyPI</a></p>
       </footer>
     </div>
