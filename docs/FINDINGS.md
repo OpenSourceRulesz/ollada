@@ -341,3 +341,35 @@ machine and the laptop run answered the harder question anyway.
   tok/s and is NOT comparable to the site's canvas tok/s figures for
   the other models — it is recorded here, not in the site's Speed
   column, for exactly that reason.
+
+## 10. SDAR pad_token_id load fix (2026-10-27)
+
+- **What broke.** A fresh 0.3.0 install could pull sdar:1.7b fine but
+  crashed at load, both prompts, with `AttributeError:
+  'SDARConfig' object has no attribute 'pad_token_id'` (the model's
+  `modeling_sdar.py` reads `config.pad_token_id` unconditionally at
+  init, line 442; the 4B's reads it at line 435). The 4B is exposed
+  to the same crash: its config also ships no pad_token_id key.
+- **What was ruled out.** Not a newer transformers: the fresh worker
+  env had 4.57.6, the laptop-verified version. Not a recent Hub
+  change: the model files are unchanged since July 2026 and the
+  config never carried the key. Not the pin: the pin already caps
+  at <5 and resolves to the verified version. Why the laptop's
+  earlier pull worked on the same versions and files could not be
+  established from the sandbox (the laptop's cache and environment
+  are not inspectable here); the fix removes the dependency
+  instead of explaining the difference.
+- **The fix.** The SDAR adapter now loads the model config before
+  the model and supplies eos as the pad token when the key is
+  missing or None (`_ensure_pad_token` in `ollada/adapters/sdar.py`;
+  eos is 151643 for both sizes, and it is also the pad token in
+  `generation_config.json`). When eos is itself absent, an explicit
+  None is set, which still satisfies the modeling
+  (padding_idx=None means no padding). Family-wide: both SDAR
+  sizes share the adapter.
+- **Verification.** Fresh-install files on a CPU-only sandbox
+  (7.7 GB RAM, `--force` past the 8 GB fit floor): capital
+  answered Paris and fib returned a correct function, through the
+  real adapter and worker path. Suite: 90 passed, including 3 new
+  `_ensure_pad_token` cases. The fix is committed to main; it
+  reaches PyPI only with a 0.3.1 release.

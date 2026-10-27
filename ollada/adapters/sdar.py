@@ -118,7 +118,7 @@ from pathlib import Path
 
 import torch
 from torch.nn import functional as F
-from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, GenerationConfig
 from transformers.cache_utils import DynamicCache
 
 from ollada.adapters.base import AdapterError, BaseAdapter, quantization_config
@@ -903,6 +903,27 @@ def _resolve_load_plan(cuda_available: bool, recipe_dtype: str, quantized: bool)
     return {"dtype": "bfloat16", "device_map": None, "cpu": True}
 
 
+def _ensure_pad_token(config):
+    """Give SDAR's config a pad token when it has none.
+
+    The model's config.json ships no pad_token_id key and its config
+    class defines no default, while its modeling reads
+    config.pad_token_id unconditionally at init — so a fresh load
+    crashes with AttributeError on the verified transformers
+    version (found on a fresh 0.3.0 install, 2026-10-27; the
+    laptop's earlier pull worked, so the trigger is not the
+    transformers version or the pin). The model's own eos token is
+    the right value: it is also the pad token in
+    generation_config.json. When eos is itself absent, an explicit
+    None still satisfies the modeling (its nn.Embedding takes
+    padding_idx=None to mean no padding), and it keeps the
+    attribute present so the init read cannot raise.
+    """
+    if getattr(config, "pad_token_id", None) is None:
+        config.pad_token_id = getattr(config, "eos_token_id", None)
+    return config
+
+
 class SdarAdapter(BaseAdapter):
     family = "sdar"
     supports_watch = True
@@ -963,6 +984,12 @@ class SdarAdapter(BaseAdapter):
                     f"(recipe dtype {recipe.dtype} is not CPU-viable); "
                     "no device_map, model stays on CPU"
                 )
+            # See _ensure_pad_token: the model config ships no pad
+            # token, and the modeling reads it at init.
+            model_config = AutoConfig.from_pretrained(
+                local_dir, trust_remote_code=True
+            )
+            kwargs["config"] = _ensure_pad_token(model_config)
             self.model = AutoModelForCausalLM.from_pretrained(local_dir, **kwargs)
         _unregister_triton_stub()
         self.model.eval()

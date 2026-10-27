@@ -55,6 +55,7 @@ def _stubbed_sdar():
 
     transformers_stub = types.ModuleType("transformers")
     transformers_stub.AutoModelForCausalLM = object
+    transformers_stub.AutoConfig = object
     transformers_stub.AutoTokenizer = object
     transformers_stub.GenerationConfig = object
     transformers_stub.BitsAndBytesConfig = object
@@ -167,6 +168,28 @@ def test_kwargs_alias_noop_when_losskwargs_present():
         fake_utils = types.SimpleNamespace(LossKwargs="LK", TransformersKwargs="TK")
         assert sdar._register_kwargs_alias(fake_utils) is None
         assert fake_utils.LossKwargs == "LK"
+
+
+def test_ensure_pad_token_supplies_eos_when_missing():
+    with _stubbed_sdar() as sdar:
+        cfg = types.SimpleNamespace(eos_token_id=151643)
+        out = sdar._ensure_pad_token(cfg)
+        assert out is cfg
+        assert out.pad_token_id == 151643
+
+
+def test_ensure_pad_token_keeps_existing_pad():
+    with _stubbed_sdar() as sdar:
+        cfg = types.SimpleNamespace(pad_token_id=999, eos_token_id=151643)
+        assert sdar._ensure_pad_token(cfg).pad_token_id == 999
+
+
+def test_ensure_pad_token_none_eos_still_sets_attribute():
+    with _stubbed_sdar() as sdar:
+        cfg = types.SimpleNamespace(eos_token_id=None)
+        out = sdar._ensure_pad_token(cfg)
+        assert out.pad_token_id is None
+        assert hasattr(out, "pad_token_id")
 
 
 def _fake_model(module_name):
