@@ -373,3 +373,65 @@ machine and the laptop run answered the harder question anyway.
   real adapter and worker path. Suite: 90 passed, including 3 new
   `_ensure_pad_token` cases. The fix is committed to main; it
   reaches PyPI only with a 0.3.1 release.
+
+## 11. Worker-env shadowing: manager transformers leaked into the worker (2026-10-27)
+
+- **What broke.** The released 0.3.1, installed exactly as the guide
+  says (`pip install "ollada[cpu]"`), failed at SDAR load with
+  `KeyError: 'default'` in the model's rotary-embedding init
+  (`modeling_sdar.py` line 411: `ROPE_INIT_FUNCTIONS[self.rope_type]`).
+  The modeling sets `rope_type` to `"default"` when the config's
+  `rope_scaling` is None — and the shipped config's `rope_scaling`
+  is None — but `"default"` is not a key of that dict. The run never
+  reached the pad line, so the §10 fix was neither confirmed nor
+  refuted by it; it failed twice, deterministically.
+- **The cause.** The manager spawns the worker with PYTHONPATH set to
+  the manager's ollada location (`manager.py`), so the worker runs the
+  manager's exact code. For an installed manager that location is
+  site-packages, which sits ahead of the worker venv's site-packages
+  on sys.path — so the worker imported the manager venv's packages,
+  not the worker env's pinned ones. The `[cpu]` extra pins nothing,
+  so the manager venv had transformers 5.21.0 while the sdar worker
+  env had the pinned 4.57.6; under 5.x the config's rope_scaling
+  came out None and the modeling fell back to `"default"`. Same code,
+  same worker env, same model files: the outcome flipped
+  deterministically with which transformers the worker imported
+  (installed path failed twice, repo path passed twice). Repo and
+  editable managers were immune — their ollada location is the repo
+  root, which holds no third-party packages. The same shadowing
+  explains the Dell's earlier 5.x pad break (different symptom, same
+  leak), and 0.3.0's smoke missed it because it never ran a model.
+- **The fix.** The worker now strips the manager's PYTHONPATH entries
+  (and the caller's working directory) from sys.path on startup, in
+  the `__main__` block before any adapter or third-party import
+  (`_drop_manager_paths_from_sys_path` in `ollada/worker.py`). This
+  is safe because `python -m` has already imported the ollada
+  package itself by then, and submodule imports resolve through the
+  package's `__path__`, not sys.path — so the strip cannot break
+  ollada imports; it only changes where transformers and torch
+  resolve from: the worker venv. The worker venv's own
+  site-packages are exempted, so a degenerate setup where manager
+  and worker share one venv keeps working (and there is nothing to
+  shadow in that case — same env, same versions). The manager still
+  sets PYTHONPATH, so the worker still runs the manager's exact
+  code; the strip only removes the leak. The `[cpu]`/`[gpu]` extras
+  are deliberately left unpinned — isolation makes the manager
+  venv's transformers version irrelevant to worker runs.
+- **Verification.** Suite: 91 passed, including a new test for the
+  strip (manager entries and cwd removed, worker site-packages kept,
+  ollada still importable). Repo path (guide venv, PYTHONPATH=repo):
+  capital answered a bare "Paris", 183s. Installed path (fresh venv,
+  pip install of the fixed working tree with `[cpu]` — manager
+  transformers 5.21.0 confirmed in the venv): capital answered "The
+  capital of France is Paris.", 38.1s (warm). Both through the real
+  adapter and worker path. The installed-path test used the
+  working-tree 0.3.1+fix; the public-index proof comes with the
+  0.3.2 release smoke.
+- **What it does not claim.** The fix covers the worker path only.
+  The in-process debug path (`OLLADA_INPROCESS=1`) still loads
+  adapters in the manager process with the manager venv's
+  transformers, and is still guarded by the pin check (a 5.x manager
+  venv refuses an SDAR load there with a clear message instead of
+  crashing). No GPU-side re-verification was needed: the leak is
+  in process startup, not in model execution, and the CPU paths
+  prove the mechanism on both sides of it.

@@ -99,6 +99,13 @@ class WorkerAdapter(BaseAdapter):
     def _start(self) -> None:
         env = dict(os.environ)
         ollada_root = str(Path(__file__).resolve().parent.parent.parent)
+        # PYTHONPATH here exists only so the worker finds the manager's
+        # exact ollada code. The worker strips these entries from
+        # sys.path on startup (worker._drop_manager_paths_from_sys_path)
+        # once ollada is imported, so an installed manager's
+        # site-packages cannot shadow the worker env's pinned packages
+        # (2026-10-27: a manager venv's transformers 5.x shadowed the
+        # sdar worker's 4.57.6 and broke SDAR's rope init).
         env["PYTHONPATH"] = ollada_root + os.pathsep + env.get("PYTHONPATH", "")
         self._proc = subprocess.Popen(
             [self._worker_python, "-m", "ollada.worker"],

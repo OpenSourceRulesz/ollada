@@ -27,6 +27,13 @@ The worker prints {"event": "ready", "pid": ...} on startup so the manager
 can tell a broken spawn (bad venv, missing package) from a slow load.
 EOF on stdin ends the loop and the process exits; the manager also kills
 the process on unload, which is the clean-VRAM-unload half of the design.
+
+Worker isolation note: the manager spawns this process with PYTHONPATH
+pointing at the manager's ollada location, so the worker runs the
+manager's exact code. Those entries are stripped from sys.path on
+startup (see _drop_manager_paths_from_sys_path) once the ollada
+package itself is imported, so the worker's third-party packages always
+resolve from its own pinned venv, never from the manager's venv.
 """
 
 from __future__ import annotations
@@ -34,8 +41,10 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import site
 import sys
 import traceback
+from pathlib import Path
 
 
 class WorkerError(RuntimeError):
@@ -63,6 +72,81 @@ def _cuda_peak() -> tuple[float | None, str | None]:
         return peak, str(torch.cuda.get_device_name(0))
     except Exception:
         return None, None
+
+
+def _drop_manager_paths_from_sys_path() -> list[str]:
+    """Drop the manager's PYTHONPATH entries (and cwd) from sys.path.
+
+    The manager spawns the worker with PYTHONPATH pointed at the
+    manager's ollada location so the worker runs the manager's exact
+    code. For an installed manager that location is site-packages —
+    which would also put the manager venv's packages (torch,
+    transformers, ...) ahead of the worker venv's pinned ones on
+    sys.path, silently breaking worker isolation. Proven 2026-10-27:
+    a PyPI-installed manager's unpinned transformers 5.21.0 shadowed
+    the sdar worker env's pinned 4.57.6, and under 5.x SDAR's
+    rope_scaling came out None, so its modeling fell back to a
+    "default" rope type that does not exist (KeyError). Repo and
+    editable managers were immune — their ollada location is the repo
+    root, which holds no third-party packages.
+
+    This runs only in the real worker subprocess (the __main__ block),
+    never when main() is driven in-process by tests: by then the
+    ollada package itself is already imported (python -m imports it
+    before this runs), and submodule imports resolve through the
+    package's __path__, not sys.path — so dropping these entries
+    cannot break ollada imports. It only changes where third-party
+    packages (transformers, torch) resolve from: the worker venv.
+    The worker venv's own site-packages are exempted, so a degenerate
+    setup where manager and worker share one venv keeps working (and
+    there is nothing to shadow in that case — same env, same versions).
+
+    Returns the removed entries, for tests and debugging.
+    """
+    removed: list[str] = []
+    # The worker venv's own site-packages must never be stripped.
+    exempt: set[str] = set()
+    try:
+        for entry in site.getsitepackages():
+            exempt.add(str(Path(entry).resolve()))
+    except Exception:
+        pass
+    try:
+        user_site = site.getusersitepackages()
+        if user_site:
+            exempt.add(str(Path(user_site).resolve()))
+    except Exception:
+        pass
+
+    candidates: set[str] = set()
+    for entry in os.environ.get("PYTHONPATH", "").split(os.pathsep):
+        if not entry:
+            continue
+        try:
+            candidates.add(str(Path(entry).resolve()))
+        except Exception:
+            candidates.add(entry)
+
+    cwd = str(Path.cwd().resolve())
+    kept: list[str] = []
+    for entry in sys.path:
+        # '' means cwd, and for `python -m` sys.path[0] is cwd: the
+        # worker never imports from the caller's working directory.
+        if entry == "" or entry == cwd:
+            removed.append(entry)
+            continue
+        try:
+            resolved = str(Path(entry).resolve())
+        except Exception:
+            resolved = entry
+        if resolved in candidates and resolved not in exempt:
+            removed.append(entry)
+            continue
+        kept.append(entry)
+    sys.path[:] = kept
+    # Do not leak the manager's path to anything the worker spawns.
+    os.environ.pop("PYTHONPATH", None)
+    return removed
 
 
 def main(argv=None, adapter_factory=None, stdin=None, stdout=None) -> int:
@@ -164,4 +248,7 @@ def main(argv=None, adapter_factory=None, stdin=None, stdout=None) -> int:
 
 
 if __name__ == "__main__":
+    # Isolate BEFORE any adapter/third-party import: main() imports
+    # adapters lazily, so this ordering is what makes the strip safe.
+    _drop_manager_paths_from_sys_path()
     raise SystemExit(main())

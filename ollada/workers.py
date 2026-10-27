@@ -6,7 +6,10 @@ needs >=4.57,<5), so no single install satisfies the shelf. A worker venv
 holds exactly one family's stack; the manager spawns the venv's python
 with PYTHONPATH pointed at the manager's ollada package, so the worker
 code itself always matches the manager's version and is never installed
-twice.
+twice. The worker drops those PYTHONPATH entries from sys.path once
+its own ollada package is imported (ollada/worker.py), so manager-env
+packages cannot shadow the worker env's pins — an installed manager's
+unpinned transformers once did exactly that (2026-10-27).
 
 One env per family does NOT mean one model's recipe: the install set is
 the UNION of the family's recipes' extras. The sdar family proved why —

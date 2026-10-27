@@ -9,12 +9,15 @@ print is the real-world case).
 
 import io
 import json
+import os
+import site
+from pathlib import Path
 
 import pytest
 
 from ollada.adapters.base import GenResult
 from ollada.recipes import get_recipe
-from ollada.worker import main as worker_main
+from ollada.worker import _drop_manager_paths_from_sys_path, main as worker_main
 
 
 class _StubAdapter:
@@ -127,6 +130,33 @@ def test_unknown_op_and_chat_before_load_are_errors():
     ], _StubAdapter)
     assert [m for m in lines if m.get("id") == 1][0]["ok"] is False
     assert [m for m in lines if m.get("id") == 2][0]["ok"] is False
+
+
+def test_drop_manager_paths_strips_pythonpath_but_keeps_worker_sitepackages(
+    monkeypatch, tmp_path,
+):
+    # 2026-10-27: an installed manager's site-packages on PYTHONPATH let
+    # its unpinned transformers 5.x shadow the worker env's pinned 4.x.
+    # The strip must remove manager entries (and cwd) while keeping the
+    # worker venv's own site-packages and unrelated entries — and must
+    # not break ollada imports, which resolve via the package __path__.
+    mgr_site = str(tmp_path / "mgr_site")
+    worker_site = site.getsitepackages()[0]
+    other = str(tmp_path / "other")
+    cwd = str(Path.cwd().resolve())
+    import sys
+
+    monkeypatch.setattr(sys, "path", [cwd, "", mgr_site, worker_site, other])
+    monkeypatch.setenv("PYTHONPATH", os.pathsep.join([mgr_site, worker_site]))
+    removed = _drop_manager_paths_from_sys_path()
+    assert mgr_site in removed
+    assert cwd in removed and "" in removed
+    assert mgr_site not in sys.path
+    assert worker_site in sys.path  # exempt: the worker venv's own packages
+    assert other in sys.path
+    assert "PYTHONPATH" not in os.environ
+    import ollada.adapters  # noqa: F401 — still importable after the strip
+    import ollada.recipes  # noqa: F401
 
 
 def test_real_recipe_loads_through_the_factory():
