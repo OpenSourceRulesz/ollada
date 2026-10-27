@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# RETIRED 2026-10-27 — do not use to regenerate the site.
+# This generated the old white-theme site (library.html, models/*.html,
+# still served from gh-pages for URL stability). The live homepage is the
+# React single-file build in site/ (see site/README.md), deployed to
+# gh-pages as index.html. Kept only as provenance for the legacy pages.
 """Build the ollada shelf site from the catalog.
 
 Reads ollada/catalog/*.yaml (the same files the runtime loads) and emits a
@@ -418,7 +423,7 @@ measured on the hardware named — no vendor benchmarks.
 
 GPU numbers are from a Colab Tesla T4 (2026-10-21) and are the conservative
 floor. The three GPU models were re-verified on a desktop RTX 5060 Ti on
-2026-10-25 — dream:7b 9.13 GB, sdar:4b 8.34 GB, diffcoder:8b 9.17 GB — with
+2026-10-25 — dream:7b 9.13 GB, sdar:4b 8.34 GB, diffcoder:8b 13.65 GB — with
 notes on each model's site page.
 `sdar:1.7b` was verified on a laptop CPU (2026-10-23) — no GPU was used, so
 it has no VRAM figure. Weights come from Hugging Face — Ollada hosts no
