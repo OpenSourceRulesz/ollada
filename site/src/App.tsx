@@ -330,8 +330,49 @@ source ~/.ollada-venv/bin/activate`;
 const FIRSTRUN = `pip install "ollada[cpu]"
 ollada pull sdar:1.7b
 ollada run sdar:1.7b`;
+const GUIDE_TEXT = `Set up ollada (a local CLI for running open diffusion language models) by following these steps exactly, in order.
+
+New to Python? Step-by-step setup
+
+Three things before the three commands: Python, a terminal, and a virtual environment. Five minutes once, then the quick commands just work.
+
+1. Check Python
+You need Python 3.10 or newer. Check with: python3 --version
+The Python that ships with a Mac is 3.9 — too old. Get a current one from python.org/downloads. On Windows, tick 'Add python.exe to PATH' during install.
+
+2. Open a terminal
+Mac: Terminal (Applications → Utilities, or Spotlight → Terminal). Windows: PowerShell or Terminal. Linux: your terminal.
+
+3. Make a virtual environment
+Modern Python refuses to install packages globally, so ollada lives in its own folder. One command to make it, one to switch into it:
+${VENV}
+Windows PowerShell instead: ~\\.ollada-venv\\Scripts\\Activate.ps1
+If PowerShell refuses to run it, run: Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+first, then activate again.
+
+4. Install and run
+Laptop without a GPU — the try-first path:
+${FIRSTRUN}
+NVIDIA GPU? Same steps with ollada[gpu] instead.
+At the >>> prompt, ask: What is the capital of France? Answer with exactly one word. Expect Paris. Ctrl-C quits.
+
+What to expect: the first run is slow twice — the model download (about 4 GB for sdar:1.7b) and a one-time worker-environment build (torch plus transformers, a few hundred MB). Later runs skip both. On CPU, short answers take seconds, long ones up to a minute.
+
+If it fails:
+command not found: pip or python3 — Python isn't installed or isn't on PATH. See step 1.
+externally managed environment — you're not inside a virtual environment. See step 3.
+requires Python >= 3.10 — your Python is too old. See step 1.
+Anything else — copy the whole error; that's what's needed to help.`;
 function InstallGuide() {
   const ref = useRef<HTMLDetailsElement>(null);
+  const [copyLabel, setCopyLabel] = useState("Copy instructions");
+  const copy = () => {
+    navigator.clipboard?.writeText(GUIDE_TEXT).then(
+      () => setCopyLabel("Copied"),
+      () => setCopyLabel("Select and copy")
+    );
+    setTimeout(() => setCopyLabel("Copy instructions"), 1600);
+  };
   useEffect(() => {
     const open = () => {
       const el = ref.current;
@@ -347,6 +388,7 @@ function InstallGuide() {
   return (
     <details id="install" ref={ref}>
       <summary>New to Python? Step-by-step setup</summary>
+      <div className="copyrow"><button className="copy" onClick={copy}>{copyLabel}</button></div>
       <p className="sub">Three things before the three commands: Python, a terminal, and a virtual environment. Five minutes once, then the quick commands above just work.</p>
       <dl>
         <dt>1. Check Python</dt>
