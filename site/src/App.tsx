@@ -1,5 +1,31 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import "./site.css";
+
+/* ---------- segmented tabs: bordered pill group, filled active state,
+   roving tabindex + arrow-key / Home / End support (handoff C) ---------- */
+type TabDef = { id: string; label: string };
+function Tabs({ tabs, value, onChange, label }: { tabs: TabDef[]; value: string; onChange: (id: string) => void; label: string }) {
+  const key = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
+    let next: number | null = null;
+    if (e.key === "ArrowRight") next = (i + 1) % tabs.length;
+    if (e.key === "ArrowLeft") next = (i - 1 + tabs.length) % tabs.length;
+    if (e.key === "Home") next = 0;
+    if (e.key === "End") next = tabs.length - 1;
+    if (next === null) return;
+    e.preventDefault();
+    onChange(tabs[next].id);
+    e.currentTarget.parentElement?.querySelectorAll("button")[next]?.focus();
+  };
+  return (
+    <div className="tabs" role="tablist" aria-label={label}>
+      {tabs.map((t, i) => (
+        <button key={t.id} role="tab" aria-selected={value === t.id} tabIndex={value === t.id ? 0 : -1} onClick={() => onChange(t.id)} onKeyDown={(e) => key(e, i)}>
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 const rnd = (n: number) => Math.floor(Math.random() * n);
 
@@ -87,13 +113,7 @@ function Install() {
   };
   return (
     <div className="cmdbox">
-      <div className="tabs" role="tablist">
-        {(["cpu", "gpu"] as const).map((x) => (
-          <button key={x} role="tab" aria-selected={t === x} onClick={() => setT(x)}>
-            {x === "cpu" ? "Laptop (CPU)" : "GPU"}
-          </button>
-        ))}
-      </div>
+      <Tabs tabs={[{ id: "cpu", label: "Laptop (CPU)" }, { id: "gpu", label: "GPU" }]} value={t} onChange={(id) => setT(id as "cpu" | "gpu")} label="Install target" />
       <div className="code" role="tabpanel" tabIndex={0}>
         {CMDS[t].map((l) => (
           <span key={l}>
@@ -248,7 +268,7 @@ function NavMenu() {
     <div className="navwrap">
       <button className="burger" aria-label="Menu" aria-expanded={open} onClick={() => setOpen(!open)}>☰</button>
       <nav aria-label="Primary" className={open ? "open" : ""}>
-        <a href="#install" onClick={() => { close(); const el = document.getElementById("install"); if (el instanceof HTMLDetailsElement) el.open = true; }}>Install</a>
+        <a href="#install" onClick={close}>Get started</a>
         <a href="#demo" onClick={close}>Demo</a>
         <a href="#shelf" onClick={close}>Shelf</a>
         <a href="#api" onClick={close}>Local API</a>
@@ -306,13 +326,7 @@ function Api() {
       <p className="sub">Start the server, then point any tool that speaks HTTP at it. The chat endpoint is Ollama-shaped; there is also <code>POST /api/generate</code> for a single prompt and OpenAI-shaped <code>POST /v1/chat/completions</code>.</p>
       <pre className="code">{SERVE}</pre>
       <div className="cmdbox">
-        <div className="tabs" role="tablist">
-          {(["curl", "ps", "js", "py"] as const).map((x) => (
-            <button key={x} role="tab" aria-selected={tab === x} onClick={() => setTab(x)}>
-              {labels[x]}
-            </button>
-          ))}
-        </div>
+        <Tabs tabs={(["curl", "ps", "js", "py"] as const).map((x) => ({ id: x, label: labels[x] }))} value={tab} onChange={(id) => setTab(id as "curl" | "ps" | "js" | "py")} label="Code example language" />
         <div role="tabpanel" tabIndex={0}>
           {tab === "ps" && <p className="fine">On Windows PowerShell, <code>curl.exe</code> mangles the quoted JSON — use this instead:</p>}
           <div className="copyrow"><button className="copy" onClick={copy}>{copyLabel}</button></div>
@@ -332,42 +346,6 @@ const VENV_PS = `py -m venv $HOME\\.ollada-venv
 const FIRSTRUN = `pip install "ollada[cpu]"
 ollada pull sdar:1.7b
 ollada run sdar:1.7b`;
-const GUIDE_TEXT = `Set up ollada (a local CLI for running open diffusion language models) by following these steps exactly, in order.
-
-New to Python? Step-by-step setup
-
-Three things before the three commands: Python, a terminal, and a virtual environment. Five minutes once, then the quick commands just work.
-
-1. Check Python
-You need Python 3.10 or newer. Check with: python3 --version (Mac/Linux) or py --version (Windows)
-The Python that ships with a Mac is 3.9 — too old. Get a current one from python.org/downloads. On Windows, tick 'Add python.exe to PATH' during install.
-
-2. Open a terminal
-Mac: Terminal (Applications → Utilities, or Spotlight → Terminal). Windows: PowerShell or Terminal. Linux: your terminal.
-
-3. Make a virtual environment
-Modern Python refuses to install packages globally, so ollada lives in its own folder. Run ONLY the block for your system — one command to make it, one to switch into it:
-Mac / Linux:
-${VENV}
-Windows PowerShell:
-${VENV_PS}
-If PowerShell refuses to run it, run: Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-first, then activate again.
-
-4. Install and run
-Laptop without a GPU — the try-first path:
-${FIRSTRUN}
-NVIDIA GPU? Same steps with ollada[gpu] instead.
-At the >>> prompt, ask: What is the capital of France? Answer with exactly one word. Expect Paris. Ctrl-C quits.
-
-What to expect: the first run is slow twice — the model download (about 4 GB for sdar:1.7b) and a one-time worker-environment build (torch plus transformers, a few hundred MB). Later runs skip both. On CPU, short answers take seconds, long ones up to a minute.
-
-If it fails:
-command not found: pip or python3 — Python isn't installed or isn't on PATH. See step 1.
-Python was not found; run without arguments to install from the Microsoft Store — that's the Windows stub, not real Python. Install from python.org/downloads and tick 'Add python.exe to PATH', then check with py --version. See step 1.
-externally managed environment — you're not inside a virtual environment. See step 3.
-requires Python >= 3.10 — your Python is too old. See step 1.
-Anything else — copy the whole error; that's what's needed to help.`;
 /* One command block, in the hero box style, with its own Copy row.
    Used for the three expander blocks so each copies only itself:
    copying the whole guide would hand a Windows user the Mac block
@@ -389,58 +367,60 @@ function CmdBlock({ text }: { text: string }) {
     </div>
   );
 }
-function InstallGuide() {
-  const ref = useRef<HTMLDetailsElement>(null);
-  const [copyLabel, setCopyLabel] = useState("Copy instructions");
-  const copy = () => {
-    navigator.clipboard?.writeText(GUIDE_TEXT).then(
-      () => setCopyLabel("Copied"),
-      () => setCopyLabel("Select and copy")
-    );
-    setTimeout(() => setCopyLabel("Copy instructions"), 1600);
-  };
-  useEffect(() => {
-    const open = () => {
-      const el = ref.current;
-      if (!el) return;
-      el.open = true;
-      el.scrollIntoView();
-    };
-    if (location.hash === "#install") open();
-    const onHash = () => { if (location.hash === "#install") open(); };
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
-  }, []);
+function GetStarted() {
+  const [os, setOs] = useState<"mac" | "win" | "linux">("mac");
+  const osTabs = [{ id: "mac", label: "Mac" }, { id: "win", label: "Windows" }, { id: "linux", label: "Linux" }];
+  const venv = os === "win" ? VENV_PS : VENV;
+  const venvLabel = os === "win" ? "Windows PowerShell" : "Mac / Linux";
   return (
-    <details id="install" ref={ref}>
-      <summary>New to Python? Step-by-step setup</summary>
-      <div className="copyrow"><button className="copy" onClick={copy}>{copyLabel}</button></div>
-      <p className="sub">Three things before the three commands: Python, a terminal, and a virtual environment. Five minutes once, then the quick commands above just work.</p>
-      <dl>
-        <dt>1. Check Python</dt>
-        <dd>You need Python 3.10 or newer. Check with <code>python3 --version</code> on Mac/Linux, <code>py --version</code> on Windows. The Python that ships with a Mac is 3.9 — too old. Get a current one from python.org/downloads. On Windows, tick ‘Add python.exe to PATH’ during install.</dd>
-        <dt>2. Open a terminal</dt>
-        <dd>Mac: Terminal (Applications → Utilities, or Spotlight → Terminal). Windows: PowerShell or Terminal. Linux: your terminal.</dd>
-        <dt>3. Make a virtual environment</dt>
-        <dd>Modern Python refuses to install packages globally, so ollada lives in its own folder. Run ONLY the block for your system — one command to make it, one to switch into it:
-          <p><strong>Mac / Linux:</strong></p>
-          <CmdBlock text={VENV} />
-          <p><strong>Windows PowerShell:</strong></p>
-          <CmdBlock text={VENV_PS} />
-          <p>If PowerShell refuses to run it, run <code>Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass</code> first, then activate again.</p>
-        </dd>
-        <dt>4. Install and run</dt>
-        <dd>Laptop without a GPU — the try-first path:
+    <section id="install">
+      <h2>Get started</h2>
+      <p className="sub">Three steps, then the quick commands just work.</p>
+      <ol className="steps">
+        <li>
+          <h3>Install Python</h3>
+          <p>Python 3.12 recommended. Avoid 3.15 for now: torch does not have wheels for it yet, and pip can silently install an old ollada instead of failing. The Python that ships with a Mac is 3.9 — too old.</p>
+          <p>
+            <a className="pbtn" href="https://www.python.org/downloads/" target="_blank" rel="noopener">Download Python</a>{" "}
+            <a className="pbtn" href="https://www.python.org/downloads/windows/" target="_blank" rel="noopener">for Windows</a>{" "}
+            <a className="pbtn" href="https://www.python.org/downloads/macos/" target="_blank" rel="noopener">for Mac</a>
+          </p>
+          <p className="fine">On Windows, tick ‘Add python.exe to PATH’ during install. On Mac, after installing from <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a>, also run the Install Certificates step: <code>open "/Applications/Python 3.12/Install Certificates.command"</code> — without it, the SDAR load fails with an SSL certificate error.</p>
+        </li>
+        <li>
+          <h3>Open a terminal</h3>
+          <Tabs tabs={osTabs} value={os} onChange={(id) => setOs(id as "mac" | "win" | "linux")} label="Operating system" />
+          <div role="tabpanel" tabIndex={0}>
+            {os === "mac" && <p>Terminal: Applications → Utilities, or Spotlight → Terminal.</p>}
+            {os === "win" && <p>PowerShell or Terminal.</p>}
+            {os === "linux" && <p>Your terminal.</p>}
+          </div>
+        </li>
+        <li>
+          <h3>Run the commands</h3>
+          <p>Make a virtual environment first — modern Python refuses to install packages globally — then check the version before you pull anything:</p>
+          <p><strong>{venvLabel}:</strong></p>
+          <CmdBlock text={venv} />
           <CmdBlock text={FIRSTRUN} />
-          NVIDIA GPU? Same steps with <code>ollada[gpu]</code> instead. At the <code>&gt;&gt;&gt;</code> prompt, ask: What is the capital of France? Answer with exactly one word. Expect Paris. Ctrl-C quits.
-        </dd>
-      </dl>
-      <p className="fine">What to expect: the first run is slow twice — the model download (about 4 GB for sdar:1.7b) and a one-time worker-environment build (torch plus transformers, a few hundred MB). Later runs skip both. On CPU, short answers take seconds, long ones up to a minute.</p>
-      <dl>
-        <dt>If it fails</dt>
-        <dd><code>command not found: pip</code> or <code>python3</code> — Python isn’t installed or isn’t on PATH. See step 1. <code>Python was not found … Microsoft Store</code> — that’s the Windows stub, not real Python. Install from python.org/downloads. See step 1. <code>externally managed environment</code> — you’re not inside a virtual environment. See step 3. <code>requires Python &gt;= 3.10</code> — your Python is too old. See step 1. Anything else — copy the whole error; that’s what’s needed to help.</dd>
-      </dl>
-    </details>
+          <p className="fine">Check first: <code>pip show ollada</code> should say 0.3.2, and <code>ollada list</code> should show five models including sdar:1.7b. If it says 0.1.0, your Python is too new — go back to step 1 with 3.12. At the <code>&gt;&gt;&gt;</code> prompt, ask: What is the capital of France? Answer with exactly one word. Expect Paris. Ctrl-C quits. NVIDIA GPU? Same steps with <code>ollada[gpu]</code> instead.</p>
+        </li>
+      </ol>
+      <details>
+        <summary>Windows PATH, PowerShell, GPU, what to expect, if it fails</summary>
+        <dl>
+          <dt>Windows PATH</dt>
+          <dd>If <code>py</code> is not found, or you get the Microsoft Store stub (“Python was not found”), that is not real Python. Install from <a href="https://www.python.org/downloads/windows/" target="_blank" rel="noopener">python.org/downloads/windows/</a> and tick ‘Add python.exe to PATH’.</dd>
+          <dt>PowerShell execution policy</dt>
+          <dd>If PowerShell refuses to run the activate script, run <code>Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass</code> first, then activate again.</dd>
+          <dt>NVIDIA GPU</dt>
+          <dd>Same steps with <code>ollada[gpu]</code> instead of <code>ollada[cpu]</code>. DiffCoder is a tight fit on a 16 GB card — close other GPU apps first.</dd>
+          <dt>What to expect</dt>
+          <dd>The first run is slow twice: the model download (about 4 GB for sdar:1.7b) and a one-time worker-environment build (torch plus transformers, a few hundred MB). Later runs skip both. On CPU, short answers take seconds, long ones up to a minute.</dd>
+          <dt>If it fails</dt>
+          <dd><code>command not found: pip</code> or <code>python3</code> — Python is not installed or not on PATH. See step 1. <code>externally managed environment</code> — you are not inside a virtual environment. See step 3. <code>requires Python &gt;= 3.10</code> — your Python is too old. See step 1. SSL <code>CERTIFICATE_VERIFY_FAILED</code> on a Mac — run the Install Certificates step in step 1. Anything else — copy the whole error; that is what is needed to help.</dd>
+        </dl>
+      </details>
+    </section>
   );
 }
 
@@ -458,12 +438,27 @@ export default function App() {
       </header>
       <main id="top">
         <div className="hero">
-          <Headline />
-          <p className="lede">Diffusion language models are scattered across Hugging Face with mismatched code and undocumented settings. <strong>Ollada puts them on one shelf: short names, one command, and a real run on named hardware before anything is listed.</strong></p>
-          <Install />
-          <p className="note">Needs Python 3.10 or newer.</p>
-          <InstallGuide />
+          <div className="hero-main">
+            <Headline />
+            <p className="mission">Open-source diffusion language models on your own machine, with numbers you can trust.</p>
+            <p className="whatis">A diffusion language model writes a whole answer at once and refines it, instead of word by word. <a href="#demo">See it work</a></p>
+            <p className="hook">sdar:1.7b runs on a laptop CPU, using 3.9 GB RAM — no GPU required.</p>
+            <p className="lede">Ollada puts them on one shelf: short names, one command, and a real run on named hardware before anything is listed.</p>
+            <Install />
+            <p className="note">Needs Python 3.12 — not 3.15 yet, torch wheels are not available for it. <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Download Python</a></p>
+          </div>
+          <div className="hero-term" aria-hidden="true">
+            <div className="term">
+              <div className="bar" aria-hidden="true"><i /><i /><i /></div>
+              <div className="body">
+                <div><span className="pr">$ </span>ollada run sdar:1.7b</div>
+                <div className="q"><span className="pr">&gt;&gt;&gt; </span>What is the capital of France? Answer with exactly one word.</div>
+                <div>Paris</div>
+              </div>
+            </div>
+          </div>
         </div>
+        <GetStarted />
         <section id="demo">
           <h2>How a diffusion model writes</h2>
           <p className="sub">Press Run. A diffusion model starts with a fully masked answer and fills it in over several passes, locking in the words it is most sure of first. This is a simplified simulation, not a real model, and its 19-word answer caps the slider at 19 steps. The trade-off is real, though: too few steps and quality drops. Real runs use more, and Dream’s recipe uses 128 steps because 32 steps garbled the code.</p>
@@ -472,8 +467,8 @@ export default function App() {
         <Shelf />
         <Api />
         <section>
-          <h2>Desktop verification — RTX 5060 Ti, 2026-10-25</h2>
-          <p className="sub">All three GPU models fit on the desktop RTX 5060 Ti. But DiffCoder is a tight fit — close other GPU apps first — and Dream’s output varies between runs, so the same prompt can occasionally fail. Full notes live in the project’s <a href="https://github.com/OpenSourceRulesz/ollada/blob/main/docs/FINDINGS.md">Findings</a>.</p>
+          <h2>Tested on real hardware</h2>
+          <p className="sub">Desktop RTX 5060 Ti, 2026-10-25. All three GPU models fit on the desktop RTX 5060 Ti. But DiffCoder is a tight fit — close other GPU apps first — and Dream’s output varies between runs, so the same prompt can occasionally fail. Full notes live in the project’s <a href="https://github.com/OpenSourceRulesz/ollada/blob/main/docs/FINDINGS.md">Findings</a>.</p>
           <details>
             <summary>Per-model findings</summary>
             <dl>
