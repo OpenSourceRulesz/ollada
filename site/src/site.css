@@ -16,8 +16,7 @@ nav{display:flex;gap:22px;font-size:.95rem}nav a{color:var(--muted);text-decorat
 .mission{font-size:1.25rem;font-weight:500;margin:0 0 12px;max-width:56ch}
 .whatis{color:var(--muted);max-width:56ch;margin:0 0 10px}
 .hook{color:var(--muted);max-width:56ch;margin:0 0 18px}
-@media(min-width:900px){.hero{display:grid;grid-template-columns:1.15fr .85fr;gap:44px;align-items:start}.hero-term{margin-top:8px}}
-@media(max-width:899px){.hero-term{display:none}}
+
 .steps{list-style:none;counter-reset:step;margin:0 0 28px;padding:0;display:grid;gap:30px}
 .steps>li{counter-increment:step;position:relative;padding-left:54px}
 .steps>li::before{content:counter(step);position:absolute;left:0;top:2px;width:36px;height:36px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:600}

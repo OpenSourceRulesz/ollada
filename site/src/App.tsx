@@ -379,7 +379,7 @@ function GetStarted() {
       <ol className="steps">
         <li>
           <h3>Install Python</h3>
-          <p>Python 3.12 recommended. Avoid 3.15 for now: torch does not have wheels for it yet, and pip can silently install an old ollada instead of failing. The Python that ships with a Mac is 3.9 — too old.</p>
+          <p>Python 3.12 to 3.14 supported, 3.12 recommended. Avoid 3.15 for now: torch does not have wheels for it yet, and pip can silently install an old ollada instead of failing. The Python that ships with a Mac is 3.9 — too old.</p>
           <p>
             <a className="pbtn" href="https://www.python.org/downloads/" target="_blank" rel="noopener">Download Python</a>{" "}
             <a className="pbtn" href="https://www.python.org/downloads/windows/" target="_blank" rel="noopener">for Windows</a>{" "}
@@ -443,19 +443,9 @@ export default function App() {
             <p className="mission">Open-source diffusion language models on your own machine, with numbers you can trust.</p>
             <p className="whatis">A diffusion language model writes a whole answer at once and refines it, instead of word by word. <a href="#demo">See it work</a></p>
             <p className="hook">sdar:1.7b runs on a laptop CPU, using 3.9 GB RAM — no GPU required.</p>
-            <p className="lede">Ollada puts them on one shelf: short names, one command, and a real run on named hardware before anything is listed.</p>
+            <p className="lede">Ollada puts open diffusion models on one shelf: short names, one command, and a real run on named hardware before anything is listed.</p>
             <Install />
-            <p className="note">Needs Python 3.12 — not 3.15 yet, torch wheels are not available for it. <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Download Python</a></p>
-          </div>
-          <div className="hero-term" aria-hidden="true">
-            <div className="term">
-              <div className="bar" aria-hidden="true"><i /><i /><i /></div>
-              <div className="body">
-                <div><span className="pr">$ </span>ollada run sdar:1.7b</div>
-                <div className="q"><span className="pr">&gt;&gt;&gt; </span>What is the capital of France? Answer with exactly one word.</div>
-                <div>Paris</div>
-              </div>
-            </div>
+            <p className="note">Needs Python 3.12 to 3.14 — not 3.15 yet, torch wheels are not available for it. <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Download Python</a></p>
           </div>
         </div>
         <GetStarted />
