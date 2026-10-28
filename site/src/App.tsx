@@ -99,7 +99,7 @@ function Headline() {
 /* ---------- install ---------- */
 const CMDS = {
   cpu: ['pip install "ollada[cpu]"', "ollada pull sdar:1.7b", "ollada run sdar:1.7b"],
-  gpu: ['pip install "ollada[gpu]"', "ollada pull diffcoder:8b", "ollada run diffcoder:8b"],
+  gpu: ['pip install "ollada[gpu]"', "ollada pull sdar:4b", "ollada run sdar:4b"],
 };
 function Install() {
   const [t, setT] = useState<"cpu" | "gpu">("cpu");
@@ -463,7 +463,7 @@ export default function App() {
         <div className="wrap"><div className="hero">
           <div className="hero-main">
             <Headline />
-            <p className="mission">Open-source diffusion language models on your own machine, with numbers you can trust.</p>
+            <p className="mission">Open-source diffusion language models on your own machine, with every number measured on real hardware.</p>
             <Install />
             <p className="hook"><strong>sdar:1.7b runs on a laptop CPU, no GPU:</strong> 3.9 GB RAM at its observed peak.</p>
             <p className="note">Needs Python 3.12 to 3.14. <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Download Python</a>. New to Python? <a href="#install">Follow the setup steps</a>.</p>
@@ -477,7 +477,7 @@ export default function App() {
         <Band tone="shelf"><Shelf /></Band>
         <Band><section id="tested">
           <h2>Tested on real hardware</h2>
-          <p className="sub">Desktop RTX 5060 Ti, 2026-10-25. All three GPU models fit on the desktop RTX 5060 Ti. But DiffCoder is a tight fit — close other GPU apps first — and Dream’s output varies between runs, so the same prompt can occasionally fail. Full notes live in the project’s <a href="https://github.com/OpenSourceRulesz/ollada/blob/main/docs/FINDINGS.md">Findings</a>.</p>
+          <p className="sub">Desktop RTX 5060 Ti (15.9 GB), 2026-10-25: all three GPU models fit. DiffCoder is tight, so close other GPU apps first. Dream’s output varies between runs. Full notes in <a href="https://github.com/OpenSourceRulesz/ollada/blob/main/docs/FINDINGS.md">Findings</a>.</p>
           <details>
             <summary>Per-model findings</summary>
             <dl>
