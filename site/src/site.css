@@ -127,3 +127,33 @@ footer{padding:36px 0 56px;border-top:1px solid var(--line);color:var(--muted);f
   #shelf td:nth-child(5){display:inline}
   #shelf td:nth-child(5)::before{content:"· ";display:inline;font-size:1rem;margin:0 .3em 0 0}
 }
+
+/* ---- color bands: tonal steps of one hue, code always on a darker well ---- */
+.band{--band:var(--bg);background:var(--band);border-top:1px solid var(--line);padding:48px 0 0}
+.band.raised{--band:#1A1C2E;--panel:#12131F}
+.band.well{--band:#0C0D16;--panel:#161726;--mask:#34376A}
+.band.shelf{--band:#1E1F3F;--panel:#16173A;--line:#34376E}
+.band section{padding:0 0 56px;border-top:0}
+.band footer{border-top:0;padding:0 0 48px}
+.strip{display:flex;gap:6px;margin:0 0 22px}
+.strip i{width:10px;height:10px;border-radius:2px;background:var(--mask)}
+.strip i:nth-child(n+4){background:var(--accent)}
+.mission{font-size:clamp(1.25rem,2.8vw,1.6rem);line-height:1.35;letter-spacing:-.01em;max-width:34ch;margin:0 0 22px}
+.hook{color:var(--ink);margin:18px 0 14px}
+.hook strong{font-weight:600}
+@media (max-width:640px){.band{padding-top:36px}.band section{padding-bottom:40px}.hero{padding-top:28px}}
+
+/* ---- pass 2: nav CTA, mobile run notes, closing CTA ---- */
+header nav a.cta{background:var(--ink);color:var(--bg);padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:500}
+header nav a.cta:hover{background:#fff;color:var(--bg)}
+#shelf .rn-m{display:none}
+#shelf .rn-m summary{cursor:pointer;color:var(--muted);font-size:.85rem;margin-top:6px}
+@media (max-width:640px){
+  header nav a.cta{background:none;color:var(--link);padding:0;font-weight:400}
+  #shelf td small.rn-d{display:none}
+  #shelf .rn-m{display:block}
+}
+
+/* ---- pass 3: two real color blocks, both from the logo's periwinkle ---- */
+.band.shelf{--band:#24265E;--panel:#1B1D4A;--line:#3A3D80;--mask:#3A3D80}
+.band.light{--band:#E9EAF6;--ink:#12131F;--muted:#4A4D6B;--line:#C9CCE6;--link:#4B4EBF;--mask:#C9CCF0;--panel:#DADCF2;color:var(--ink)}

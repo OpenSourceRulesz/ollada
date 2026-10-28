@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import "./site.css";
 
 /* ---------- segmented tabs: bordered pill group, filled active state,
@@ -246,7 +246,7 @@ function Shelf() {
               return (
                 <tr key={m.n}>
                   <td className="n">{m.n}</td><td>{m.use}</td>
-                  <td>{m.on}<small>{m.date}</small></td>
+                  <td>{m.on}<small className="rn-d">{m.date}</small><details className="rn-m"><summary>Run notes</summary><small>{m.date}</small></details></td>
                   <td className="num">{m.mem}</td><td className="num">{m.spd}</td>
                   <td><span className={`st ${c}`}>{t}</span></td>
                 </tr>
@@ -268,12 +268,12 @@ function NavMenu() {
     <div className="navwrap">
       <button className="burger" aria-label="Menu" aria-expanded={open} onClick={() => setOpen(!open)}>☰</button>
       <nav aria-label="Primary" className={open ? "open" : ""}>
-        <a href="#install" onClick={close}>Get started</a>
         <a href="#demo" onClick={close}>Demo</a>
         <a href="#shelf" onClick={close}>Shelf</a>
         <a href="#api" onClick={close}>Local API</a>
         <a href="https://github.com/OpenSourceRulesz/ollada" onClick={close}>GitHub</a>
         <a href="https://pypi.org/project/ollada/" onClick={close}>PyPI</a>
+        <a href="#install" className="cta" onClick={close}>Get started</a>
       </nav>
     </div>
   );
@@ -367,8 +367,15 @@ function CmdBlock({ text }: { text: string }) {
     </div>
   );
 }
+function detectOs(): "mac" | "win" | "linux" {
+  const ua = (typeof navigator !== "undefined" ? navigator.userAgent : "").toLowerCase();
+  if (ua.includes("windows")) return "win";
+  if (ua.includes("linux") && !ua.includes("android")) return "linux";
+  return "mac";
+}
+
 function GetStarted() {
-  const [os, setOs] = useState<"mac" | "win" | "linux">("mac");
+  const [os, setOs] = useState<"mac" | "win" | "linux">(detectOs);
   const osTabs = [{ id: "mac", label: "Mac" }, { id: "win", label: "Windows" }, { id: "linux", label: "Linux" }];
   const venv = os === "win" ? VENV_PS : VENV;
   const venvLabel = os === "win" ? "Windows PowerShell" : "Mac / Linux";
@@ -424,9 +431,24 @@ function GetStarted() {
   );
 }
 
+function Strip() {
+  return <div className="strip" aria-hidden="true">{[0, 1, 2, 3, 4, 5].map((i) => <i key={i} />)}</div>;
+}
+function Band({ tone = "", strip = true, children }: { tone?: string; strip?: boolean; children: ReactNode }) {
+  return (
+    <div className={`band ${tone}`.trim()}>
+      <div className="wrap">
+        {strip && <Strip />}
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   return (
-    <div className="wrap">
+    <div>
+      <div className="wrap">
       <header>
         <a className="brand" href="#top" aria-label="Ollada home">
           <svg width="52" height="49" viewBox="12 24 106 100" fill="#6C6FD8" aria-hidden="true">
@@ -436,27 +458,24 @@ export default function App() {
         </a>
         <NavMenu />
       </header>
+      </div>
       <main id="top">
-        <div className="hero">
+        <div className="wrap"><div className="hero">
           <div className="hero-main">
             <Headline />
             <p className="mission">Open-source diffusion language models on your own machine, with numbers you can trust.</p>
-            <p className="whatis">A diffusion language model writes a whole answer at once and refines it, instead of word by word. <a href="#demo">See it work</a></p>
-            <p className="hook">sdar:1.7b runs on a laptop CPU, using 3.9 GB RAM — no GPU required.</p>
-            <p className="lede">Ollada puts open diffusion models on one shelf: short names, one command, and a real run on named hardware before anything is listed.</p>
             <Install />
-            <p className="note">Needs Python 3.12 to 3.14 — not 3.15 yet, torch wheels are not available for it. <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Download Python</a></p>
+            <p className="hook"><strong>sdar:1.7b runs on a laptop CPU, no GPU:</strong> 3.9 GB RAM at its observed peak.</p>
+            <p className="note">Needs Python 3.12 to 3.14. <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Download Python</a>. New to Python? <a href="#install">Follow the setup steps</a>.</p>
           </div>
-        </div>
-        <GetStarted />
-        <section id="demo">
+        </div></div>
+        <Band tone="well"><section id="demo">
           <h2>How a diffusion model writes</h2>
-          <p className="sub">Press Run. A diffusion model starts with a fully masked answer and fills it in over several passes, locking in the words it is most sure of first. This is a simplified simulation, not a real model, and its 19-word answer caps the slider at 19 steps. The trade-off is real, though: too few steps and quality drops. Real runs use more, and Dream’s recipe uses 128 steps because 32 steps garbled the code.</p>
+          <p className="sub">A diffusion model starts with a fully masked answer and fills it in over several passes, locking in the words it is most sure of first. The trade-off is real: too few steps and quality drops. That’s why every recipe on the shelf ships with a tested step count.</p>
           <Demo />
-        </section>
-        <Shelf />
-        <Api />
-        <section>
+        </section></Band>
+        <Band tone="shelf"><Shelf /></Band>
+        <Band><section id="tested">
           <h2>Tested on real hardware</h2>
           <p className="sub">Desktop RTX 5060 Ti, 2026-10-25. All three GPU models fit on the desktop RTX 5060 Ti. But DiffCoder is a tight fit — close other GPU apps first — and Dream’s output varies between runs, so the same prompt can occasionally fail. Full notes live in the project’s <a href="https://github.com/OpenSourceRulesz/ollada/blob/main/docs/FINDINGS.md">Findings</a>.</p>
           <details>
@@ -472,20 +491,22 @@ export default function App() {
             <dd>A fresh [gpu] install lands transformers 5.x, which breaks Dream (use 4.57.6), and torch from plain PyPI was CUDA-blind on this card (use the PyTorch CUDA index). Both are encoded in the per-family worker environments.</dd>
           </dl>
           </details>
-        </section>
-        <section>
+        </section></Band>
+        <Band tone="raised"><GetStarted /></Band>
+        <Band><Api /></Band>
+        <Band tone="light"><section>
           <h2>Ground rules</h2>
           <dl>
             <dt>Free and local</dt><dd>Runs entirely on your computer. Ollada doesn't track your usage or send your prompts back to us. No paid services. MIT licensed.</dd>
             <dt>Honest about hardware</dt><dd>Dream and DiffCoder need a GPU. The SDAR models and Nemotron run on a laptop CPU — slower, but no GPU required.</dd>
             <dt>Our numbers only</dt><dd>Vendor benchmarks are never shown as Ollada measurements.</dd>
           </dl>
-        </section>
+        </section></Band>
       </main>
-      <footer>
+      <Band tone="well" strip={false}><footer>
         <p>Version 0.3.2 — five models verified on named hardware. Named the way Ollama was: Ollama ← LLaMA, Ollada ← LLaDA.</p>
         <p><a href="https://github.com/OpenSourceRulesz/ollada">Source</a> · <a href="https://github.com/OpenSourceRulesz/ollada/blob/main/docs/FINDINGS.md">Findings</a> · <a href="https://github.com/OpenSourceRulesz/ollada/blob/main/docs/LIBRARY.md">Library</a> · <a href="https://pypi.org/project/ollada/">PyPI</a></p>
-      </footer>
+      </footer></Band>
     </div>
   );
 }
