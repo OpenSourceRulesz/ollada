@@ -167,3 +167,27 @@ header nav a.cta:hover{background:#fff;color:var(--bg)}
 [id]{scroll-margin-top:88px}
 @media (max-width:640px){.topbar header{padding:10px 0}.topbar .brand svg{width:40px;height:38px}[id]{scroll-margin-top:72px}}
 @media (prefers-reduced-motion:reduce){.topbar{transition:none}}
+
+/* ---- install flow: numbered timeline, commands in code pills with icon copy ---- */
+.getrun{max-width:620px;margin-top:6px}
+.flow{list-style:none;margin:22px 0 0;padding:0}
+.flow li{position:relative;padding:0 0 24px 46px}
+.flow li::before{content:"";position:absolute;left:13px;top:34px;bottom:6px;width:2px;background:var(--line)}
+.flow li:last-child{padding-bottom:4px}
+.flow li:last-child::before{display:none}
+.flow .fn{position:absolute;left:0;top:0;width:28px;height:28px;border-radius:50%;background:var(--link);color:var(--bg);display:grid;place-items:center;font:600 .85rem var(--sans)}
+.flow .fl{margin:3px 0 8px;font-weight:600;color:var(--ink)}
+.flow .fb{margin:-2px 0 10px;color:var(--muted);font-size:.95rem}
+.flow.plain{margin-top:10px}
+.flow.plain li{padding-left:0;padding-bottom:16px}
+.flow.plain li::before{display:none}
+.pill{display:flex;align-items:center;gap:8px;background:#0C0D16;border:1px solid var(--line);border-radius:8px;padding:6px 6px 6px 14px}
+.pill code{flex:1;min-width:0;font:400 .92rem/1.6 var(--mono);background:none;padding:0;color:var(--ink);white-space:nowrap;overflow-x:auto}
+.pill .p{color:var(--muted);user-select:none}
+.icopy{flex:none;width:36px;height:36px;display:grid;place-items:center;border-radius:6px;border:1px solid transparent;background:none;color:var(--muted);cursor:pointer}
+.icopy:hover,.icopy:focus-visible{color:var(--ink);border-color:var(--line)}
+.icopy.done{color:var(--ok,#58C48C)}
+@media (max-width:640px){.pill code{font-size:.85rem}.flow li{padding-left:42px}}
+
+.osrow{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:0 0 26px}
+.osrow>span{color:var(--muted);font-size:.95rem}

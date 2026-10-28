@@ -101,27 +101,65 @@ const CMDS = {
   cpu: ['pip install "ollada[cpu]"', "ollada pull sdar:1.7b", "ollada run sdar:1.7b"],
   gpu: ['pip install "ollada[gpu]"', "ollada pull sdar:4b", "ollada run sdar:4b"],
 };
-function Install() {
-  const [t, setT] = useState<"cpu" | "gpu">("cpu");
-  const [label, setLabel] = useState("Copy");
+type FlowItem = { label: string; cmd?: string; body?: ReactNode };
+const CMD_LABELS = ["Install Ollada", "Download a model (one time)", "Start chatting"];
+const cmdItems = (cmds: string[]): FlowItem[] => cmds.map((cmd, i) => ({ label: CMD_LABELS[i], cmd }));
+
+function IconCopy({ text }: { text: string }) {
+  const [done, setDone] = useState(false);
   const copy = () => {
-    navigator.clipboard?.writeText(CMDS[t].join("\n")).then(
-      () => setLabel("Copied"),
-      () => setLabel("Select and copy")
-    );
-    setTimeout(() => setLabel("Copy"), 1600);
+    navigator.clipboard?.writeText(text).then(() => {
+      setDone(true);
+      setTimeout(() => setDone(false), 1600);
+    }, () => {});
   };
   return (
-    <div className="cmdbox">
+    <button className={`icopy${done ? " done" : ""}`} onClick={copy} aria-label={done ? "Copied" : `Copy: ${text}`} title="Copy">
+      {done ? (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+      ) : (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>
+      )}
+    </button>
+  );
+}
+
+function Flow({ items, numbered = true }: { items: FlowItem[]; numbered?: boolean }) {
+  return (
+    <ol className={`flow${numbered ? "" : " plain"}`} role="list">
+      {items.map((it, i) => (
+        <li key={it.label}>
+          {numbered && <span className="fn" aria-hidden="true">{i + 1}</span>}
+          <p className="fl">{it.label}</p>
+          {it.body && <p className="fb">{it.body}</p>}
+          {it.cmd && (
+            <div className="pill">
+              <code><span className="p" aria-hidden="true">$ </span>{it.cmd}</code>
+              <IconCopy text={it.cmd} />
+            </div>
+          )}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function Install() {
+  const [t, setT] = useState<"cpu" | "gpu">("cpu");
+  const cmds = cmdItems(CMDS[t]);
+  cmds[0] = { ...cmds[0], body: "Open a terminal, then run each command in order." };
+  const items: FlowItem[] = [
+    {
+      label: "Get Python 3.12 to 3.14",
+      body: <>Already have it? Skip to step 2. If not, the <a href="#install">step-by-step setup</a> gives you the right download for your system.</>,
+    },
+    ...cmds,
+  ];
+  return (
+    <div className="getrun">
       <Tabs tabs={[{ id: "cpu", label: "Laptop (CPU)" }, { id: "gpu", label: "GPU" }]} value={t} onChange={(id) => setT(id as "cpu" | "gpu")} label="Install target" />
-      <div className="code" role="tabpanel" tabIndex={0}>
-        {CMDS[t].map((l) => (
-          <span key={l}>
-            <span className="p">$ </span>
-            {l + "\n"}
-          </span>
-        ))}
-        <button className="copy" onClick={copy}>{label}</button>
+      <div role="tabpanel" tabIndex={0}>
+        <Flow items={items} />
       </div>
     </div>
   );
@@ -350,9 +388,6 @@ const VENV = `python3 -m venv ~/.ollada-venv
 source ~/.ollada-venv/bin/activate`;
 const VENV_PS = `py -m venv $HOME\\.ollada-venv
 & $HOME\\.ollada-venv\\Scripts\\Activate.ps1`;
-const FIRSTRUN = `pip install "ollada[cpu]"
-ollada pull sdar:1.7b
-ollada run sdar:1.7b`;
 /* One command block, in the hero box style, with its own Copy row.
    Used for the three expander blocks so each copies only itself:
    copying the whole guide would hand a Windows user the Mac block
@@ -390,32 +425,35 @@ function GetStarted() {
     <section id="install">
       <h2>Get started</h2>
       <p className="sub">Three steps, then the quick commands just work.</p>
+      <div className="osrow">
+        <span>Your system</span>
+        <Tabs tabs={osTabs} value={os} onChange={(id) => setOs(id as "mac" | "win" | "linux")} label="Operating system" />
+      </div>
       <ol className="steps">
         <li>
           <h3>Install Python</h3>
-          <p>Python 3.12 to 3.14 supported, 3.12 recommended. Avoid 3.15 for now: torch does not have wheels for it yet, and pip can silently install an old ollada instead of failing. The Python that ships with a Mac is 3.9 — too old.</p>
-          <p>
-            <a className="pbtn" href="https://www.python.org/downloads/" target="_blank" rel="noopener">Download Python</a>{" "}
-            <a className="pbtn" href="https://www.python.org/downloads/windows/" target="_blank" rel="noopener">for Windows</a>{" "}
-            <a className="pbtn" href="https://www.python.org/downloads/macos/" target="_blank" rel="noopener">for Mac</a>
-          </p>
-          <p className="fine">On Windows, tick ‘Add python.exe to PATH’ during install. On Mac, after installing from <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a>, also run the Install Certificates step: <code>open "/Applications/Python 3.12/Install Certificates.command"</code> — without it, the SDAR load fails with an SSL certificate error.</p>
+          <p>Python 3.12 to 3.14 supported, 3.12 recommended. Avoid 3.15 for now: torch does not have wheels for it yet, and pip can silently install an old ollada instead of failing.{os === "mac" && " The Python that ships with a Mac is 3.9, which is too old."}</p>
+          {os === "linux" ? (
+            <p>Most Linux distributions include Python. Check with <code>python3 --version</code>; if it’s older than 3.12, install a newer one with your package manager, or get it from <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a>.</p>
+          ) : (
+            <p><a className="pbtn" href={os === "win" ? "https://www.python.org/downloads/windows/" : "https://www.python.org/downloads/macos/"} target="_blank" rel="noopener">Download Python for {os === "win" ? "Windows" : "Mac"}</a></p>
+          )}
+          {os === "win" && <p className="fine">During install, tick ‘Add python.exe to PATH’.</p>}
+          {os === "mac" && <p className="fine">After installing, also run the Install Certificates step for the version you installed — for example, for Python 3.12: <code>open "/Applications/Python 3.12/Install Certificates.command"</code>. Without it, the SDAR load fails with an SSL certificate error.</p>}
         </li>
         <li>
           <h3>Open a terminal</h3>
-          <Tabs tabs={osTabs} value={os} onChange={(id) => setOs(id as "mac" | "win" | "linux")} label="Operating system" />
-          <div role="tabpanel" tabIndex={0}>
             {os === "mac" && <p>Terminal: Applications → Utilities, or Spotlight → Terminal.</p>}
             {os === "win" && <p>PowerShell or Terminal.</p>}
             {os === "linux" && <p>Your terminal.</p>}
-          </div>
         </li>
         <li>
           <h3>Run the commands</h3>
-          <p>Make a virtual environment first — modern Python refuses to install packages globally — then check the version before you pull anything:</p>
+          <p>First, make a virtual environment. Modern Python refuses to install packages globally:</p>
           <p><strong>{venvLabel}:</strong></p>
           <CmdBlock text={venv} />
-          <CmdBlock text={FIRSTRUN} />
+          <p><strong>Then run these one at a time, in order:</strong></p>
+          <Flow items={cmdItems(CMDS.cpu)} numbered={false} />
           <p className="fine">Check first: <code>pip show ollada</code> should say 0.3.2, and <code>ollada list</code> should show five models including sdar:1.7b. If it says 0.1.0, your Python is too new — go back to step 1 with 3.12. At the <code>&gt;&gt;&gt;</code> prompt, ask: What is the capital of France? Answer with exactly one word. Expect Paris. Ctrl-C quits. NVIDIA GPU? Same steps with <code>ollada[gpu]</code> instead.</p>
         </li>
       </ol>
@@ -496,7 +534,6 @@ export default function App() {
             <p className="mission">Open-source diffusion language models on your own machine, with every number measured on real hardware.</p>
             <Install />
             <p className="hook"><strong>sdar:1.7b runs on a laptop CPU, no GPU:</strong> 3.9 GB RAM at its observed peak.</p>
-            <p className="note">Needs Python 3.12 to 3.14. <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Download Python</a>. New to Python? <a href="#install">Follow the setup steps</a>.</p>
           </div>
         </div></div>
         <Band tone="well"><section id="demo">
