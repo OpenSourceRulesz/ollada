@@ -264,6 +264,13 @@ function Shelf() {
 function NavMenu() {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
+  useEffect(() => {
+    if (!open) return;
+    const y0 = window.scrollY;
+    const f = () => { if (Math.abs(window.scrollY - y0) > 40) setOpen(false); };
+    window.addEventListener("scroll", f, { passive: true });
+    return () => window.removeEventListener("scroll", f);
+  }, [open]);
   return (
     <div className="navwrap">
       <button className="burger" aria-label="Menu" aria-expanded={open} onClick={() => setOpen(!open)}>☰</button>
@@ -445,9 +452,31 @@ function Band({ tone = "", strip = true, children }: { tone?: string; strip?: bo
   );
 }
 
+function useTopbar() {
+  const [scrolled, setScrolled] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    let last = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      setScrolled(y > 8);
+      if (Math.abs(y - last) < 6) return;
+      const phone = window.matchMedia("(max-width: 640px)").matches;
+      setHidden(phone && y > last && y > 120);
+      last = y;
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+  return { scrolled, hidden };
+}
+
 export default function App() {
+  const { scrolled, hidden } = useTopbar();
   return (
     <div>
+      <div className={`topbar${scrolled ? " scrolled" : ""}${hidden ? " hide" : ""}`}>
       <div className="wrap">
       <header>
         <a className="brand" href="#top" aria-label="Ollada home">
@@ -458,6 +487,7 @@ export default function App() {
         </a>
         <NavMenu />
       </header>
+      </div>
       </div>
       <main id="top">
         <div className="wrap"><div className="hero">

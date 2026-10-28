@@ -157,3 +157,13 @@ header nav a.cta:hover{background:#fff;color:var(--bg)}
 /* ---- pass 3: two real color blocks, both from the logo's periwinkle ---- */
 .band.shelf{--band:#24265E;--panel:#1B1D4A;--line:#3A3D80;--mask:#3A3D80}
 .band.light{--band:#E9EAF6;--ink:#12131F;--muted:#4A4D6B;--line:#C9CCE6;--link:#4B4EBF;--mask:#C9CCF0;--panel:#DADCF2;color:var(--ink)}
+
+/* Sticky header: constant height, solid bar, hides on phones while scrolling down */
+.topbar{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:1px solid transparent;transition:transform .25s ease,border-color .2s}
+.topbar.scrolled{border-bottom-color:var(--line)}
+.topbar header{padding:14px 0}
+.topbar.hide{transform:translateY(-100%)}
+.topbar:focus-within{transform:none}
+[id]{scroll-margin-top:88px}
+@media (max-width:640px){.topbar header{padding:10px 0}.topbar .brand svg{width:40px;height:38px}[id]{scroll-margin-top:72px}}
+@media (prefers-reduced-motion:reduce){.topbar{transition:none}}
