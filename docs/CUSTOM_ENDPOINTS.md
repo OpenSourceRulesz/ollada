@@ -62,11 +62,14 @@ against your own daemon before relying on a new app:
     JSON object (`{"model": "sdar:1.7b", "message": {"content":
     "Paris"}, "done": true, "eval_count": 131,
     "eval_duration_s": 114.331}`), not NDJSON (Ollama) or SSE
-    (OpenAI). An app that only accepts a stream may wait or
-    time out. This is the biggest gap for apps like Open WebUI,
-    which send `stream: true` by default. The 114s here is a
-    sandbox-CPU time, not a shelf speed — do not quote it as
-    one.
+    (OpenAI). The 114s here is a sandbox-CPU time, not a shelf
+    speed — do not quote it as one. Open WebUI, which sends
+    `stream: true` by default, still works with this: it
+    displays the single final answer at once, with no
+    streaming tokens, no diffusion/watch animation, and no
+    streaming tok/s display (verified 2026-10-29, see below).
+    An app that strictly requires a stream could still wait
+    or time out, but Open WebUI does not.
   - **No `GET /v1/models`.** OpenAI-style apps that list models
     from that endpoint cannot list ollada's models that way.
     Use the Ollama-shaped `/api/tags` list, or type the model
@@ -85,14 +88,26 @@ against your own daemon before relying on a new app:
 ## A tested local example
 
 Open WebUI run on the *same machine* as `ollada serve`, with
-its Ollama base URL set to `http://localhost:11435`, is the
-pattern this was designed for. It is not yet verified end-to-end
-against a real Open WebUI install in this repo — the script
-above mimics its requests (including `stream: true`), and the
-streaming gap above is why that verification is still open.
-If you try it, expect listing to work and chat to return a
-single answer rather than a streaming one, and report what
-your version of the app actually does.
+its Ollama base URL set to `http://127.0.0.1:11437` (any
+free local port works; use `127.0.0.1`, not `localhost`, if
+your machine resolves `localhost` to IPv6 first), is the
+pattern this was designed for. **Verified end-to-end
+2026-10-29 on a laptop CPU** (Intel Core Ultra 7 365,
+32GB RAM, Windows 11, CPU only, ollada 0.3.2 plus the
+`/api/version` and `/api/tags` `model` fixes now on main):
+Open WebUI installed via pip in a Python 3.12 venv, first
+local account created, Ollama base URL set to the local
+serve, verify passed, all five models listed, and chat
+worked with `sdar:1.7b` ("The capital of France is Paris.")
+and with `nemotron:3b` — plain single answers, no
+streaming, as above. Two setup notes from that run:
+Open WebUI needs Python `>=3.11,<3.13`, so a Python 3.14
+venv cannot install it (use `uv python install 3.12` plus
+`uv pip install open-webui` if you only have 3.14), and
+its default OpenAI connection will error with "Missing
+bearer authentication" if you have no OpenAI key — that
+error is unrelated to ollada; disable that connection
+and ignore it.
 
 ## Fit and load notes
 
