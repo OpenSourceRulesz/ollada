@@ -21,6 +21,11 @@ and they are not the same:
 
 - `GET /api/tags` — lists the five shelf models by short name
   (`sdar:1.7b`, `sdar:4b`, `dream:7b`, `diffcoder:8b`, `nemotron:3b`).
+- `GET /api/version` — returns ollada's own version
+  (`{"version": "0.3.2"}`), not Ollama's. Added 2026-10-29 after a
+  real Open WebUI connection verify failed with HTTP 404 on
+  this endpoint, even though `/api/tags` and `/api/ps` returned
+  200.
 - `POST /api/chat` — `{"model", "messages", "options"}`, returns one
   final JSON object with `message.content`, `done: true`,
   `eval_count`, and `nfe`.
@@ -39,9 +44,10 @@ Verified against a live `ollada serve` (0.3.2, sandbox, 2026-10-29)
 with `scripts/custom_endpoint_test.py`. Run that script yourself
 against your own daemon before relying on a new app:
 
-- **Works:** `GET /health`, `GET /api/ps`, `GET /api/tags`
-  (names are correct), `POST /api/chat`, `POST /api/generate`,
-  `POST /v1/chat/completions` — all as non-streaming calls.
+- **Works:** `GET /health`, `GET /api/version`, `GET /api/ps`,
+  `GET /api/tags` (names are correct), `POST /api/chat`,
+  `POST /api/generate`, `POST /v1/chat/completions` — all as
+  non-streaming calls.
 - **Partly works:** `GET /api/tags` returns ollada's own fields
   (`name`, `family`, `source`, `license`, `task`, `description`,
   `size_gb_bf16`, `verified`). It does NOT return Ollama's

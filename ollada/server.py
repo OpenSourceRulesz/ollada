@@ -66,6 +66,14 @@ def create_app(manager: ModelManager | None = None):
     def health():
         return {"status": "ok", "version": __version__, **manager.status()}
 
+    @app.get("/api/version")
+    def version():
+        # Ollama-shaped version check. Open WebUI calls this during
+        # connection verify; without it verify fails with HTTP 404
+        # even though /api/tags and /api/ps succeed. Returns
+        # ollada's own version, not Ollama's.
+        return {"version": __version__}
+
     @app.get("/api/tags")
     def tags():
         return {"models": [r.to_public_dict() for r in load_catalog()]}

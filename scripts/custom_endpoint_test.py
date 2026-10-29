@@ -19,6 +19,7 @@ Usage:
 
 Checks:
   GET  /health
+  GET  /api/version         -- Open WebUI calls this during connection verify
   GET  /api/tags            -- Ollama list shape: name? modified_at? size? digest?
   GET  /api/ps
   GET  /v1/models           -- many OpenAI clients list here first; ollada has none (expected 404)
@@ -78,6 +79,11 @@ def main():
     s, health = req("GET", f"{base}/health")
     check("GET /health", "pass" if s == 200 and health.get("status") == "ok" else "fail",
           f"HTTP {s}, keys={sorted(health)}", results)
+
+    s, version = req("GET", f"{base}/api/version")
+    check("GET /api/version",
+          "pass" if s == 200 and version.get("version") else "fail",
+          f"HTTP {s}, version={version.get('version')!r} (ollada's own version, not Ollama's)", results)
 
     s, tags = req("GET", f"{base}/api/tags")
     models = tags.get("models", []) if isinstance(tags, dict) else []
