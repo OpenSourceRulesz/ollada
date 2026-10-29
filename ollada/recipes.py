@@ -58,6 +58,12 @@ class Recipe:
     def to_public_dict(self) -> dict:
         return {
             "name": self.name,
+            # Ollama's /api/tags shape uses "model" as the list key.
+            # Open WebUI builds its model list with m["model"], so
+            # without this field its dropdown shows "No models
+            # available" even though /api/tags returns 200.
+            # In Ollama, model == name for a tagged model.
+            "model": self.name,
             "family": self.family,
             "source": self.source,
             "license": self.license,

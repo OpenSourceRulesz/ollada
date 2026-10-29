@@ -49,11 +49,13 @@ against your own daemon before relying on a new app:
   `POST /api/generate`, `POST /v1/chat/completions` — all as
   non-streaming calls.
 - **Partly works:** `GET /api/tags` returns ollada's own fields
-  (`name`, `family`, `source`, `license`, `task`, `description`,
+  (`name`, `model` — same as `name`, added 2026-10-29 after a
+  real Open WebUI dropdown showed "No models available" without
+  it — `family`, `source`, `license`, `task`, `description`,
   `size_gb_bf16`, `verified`). It does NOT return Ollama's
-  `model`, `modified_at`, `size` (bytes), or `digest`. An app that
-  only needs names will list fine; an app that requires those
-  fields may show a blank size/date or fail to parse the list.
+  `modified_at`, `size` (bytes), or `digest`. An app that only
+  needs names will list fine; an app that requires those fields
+  may show a blank size/date.
 - **Breaks / not present:**
   - **No streaming — verified live, not just from code.**
     `POST /api/chat` with `stream: true` returned one final
