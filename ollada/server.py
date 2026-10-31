@@ -51,6 +51,19 @@ def create_app(manager: ModelManager | None = None):
     manager = manager or ModelManager()
     app = FastAPI(title="ollada", version=__version__)
 
+    # Small, additive API honesty fix: FastAPI's default error body is
+    # {"detail": ...}, while Ollama-shaped clients look for {"error": ...}.
+    # Return both, with the same message — no field is invented, and
+    # existing clients reading "detail" keep working.
+    from fastapi.responses import JSONResponse
+
+    @app.exception_handler(HTTPException)
+    async def ollama_shaped_error(request, exc: HTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail, "error": exc.detail},
+        )
+
     def run_chat(model: str, messages: list[dict], options: dict | None):
         opts = dict(options or {})
         force = opts.pop("force", False) is True  # fit-check override, not a gen param
@@ -82,7 +95,18 @@ def create_app(manager: ModelManager | None = None):
 
     @app.get("/api/ps")
     def ps():
-        return manager.status()
+        # Additive only: keep ollada's own {"loaded", "family"} shape
+        # (ollada CLI ps prints it), and add Ollama's "models" list
+        # alongside it. Entries carry only honest fields — name, model,
+        # family — no invented size/digest, which recipes do not contain.
+        status = manager.status()
+        loaded = status.get("loaded")
+        models = (
+            [{"name": loaded, "model": loaded, "family": status.get("family")}]
+            if loaded
+            else []
+        )
+        return {**status, "models": models}
 
     @app.post("/api/chat")
     def chat(req: ChatRequest):

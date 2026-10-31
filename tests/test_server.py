@@ -108,3 +108,16 @@ def test_unknown_model_is_404(client):
         json={"model": "nope:1b", "messages": [{"role": "user", "content": "hi"}]},
     )
     assert resp.status_code == 404
+    # Error body carries both shapes, same message: FastAPI "detail"
+    # and Ollama-shaped "error". Neither field is invented.
+    assert resp.json()["detail"]
+    assert resp.json()["error"] == resp.json()["detail"]
+
+
+def test_ps_keeps_ollada_shape_and_adds_models_list(client):
+    body = client.get("/api/ps").json()
+    # Ollada's own shape, unchanged (CLI ps prints it).
+    assert body["loaded"] is None
+    assert body["family"] is None
+    # Additive Ollama-shaped list: empty when nothing is loaded.
+    assert body["models"] == []
