@@ -1,3 +1,3 @@
 """ollada — the shelf for open-source diffusion language models."""
 
-__version__ = "0.3.3"
+__version__ = "0.3.4"
