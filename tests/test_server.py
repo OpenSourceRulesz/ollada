@@ -76,6 +76,23 @@ def test_ollama_shaped_chat(client):
     assert body["nfe"] == 7
 
 
+def test_v1_models_lists_catalog(client):
+    resp = client.get("/v1/models")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["object"] == "list"
+    ids = [m["id"] for m in body["data"]]
+    assert {"dream:7b", "sdar:4b", "diffcoder:8b", "sdar:1.7b", "nemotron:3b"} <= set(ids)
+    for entry in body["data"]:
+        assert entry["object"] == "model"
+        assert isinstance(entry["created"], int)
+        assert entry["created"] >= 0
+        assert isinstance(entry["owned_by"], str) and entry["owned_by"]
+        # Honest fields only: no invented digest or byte size.
+        assert "digest" not in entry
+        assert "size" not in entry
+
+
 def test_openai_shaped_chat(client):
     resp = client.post(
         "/v1/chat/completions",

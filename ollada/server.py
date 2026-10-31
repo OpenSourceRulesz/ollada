@@ -7,12 +7,14 @@ Endpoints:
   GET  /api/ps                    (what is loaded)
   POST /api/chat                  (Ollama-shaped)
   POST /api/generate              (Ollama-shaped, single prompt)
+  GET  /v1/models                 (OpenAI-shaped model list)
   POST /v1/chat/completions       (OpenAI-shaped, final text only in v0.1)
 """
 
 from __future__ import annotations
 
 import time
+from datetime import date, datetime, timezone
 
 from ollada import __version__, fit
 from ollada.recipes import RecipeError, load_catalog
@@ -105,6 +107,39 @@ def create_app(manager: ModelManager | None = None):
             "eval_duration_s": round(result.seconds, 3),
             "nfe": result.nfe,
         }
+
+    @app.get("/v1/models")
+    def openai_models():
+        # OpenAI-shaped discovery: the route OpenAI clients call first
+        # to list models. Only fields we can fill honestly are returned:
+        # id is the ollada model name, created is the recipe's verified
+        # date as a unix timestamp (0 when a recipe has no parseable
+        # date), owned_by is the source repo's owner. There is no
+        # digest or byte size in any recipe, so those fields are left
+        # absent rather than invented — a client that requires them
+        # must not be given a fake value.
+        data = []
+        for recipe in load_catalog():
+            created = 0
+            raw_date = (recipe.verified or {}).get("date")
+            if raw_date:
+                try:
+                    created = int(
+                        datetime.combine(
+                            date.fromisoformat(str(raw_date)), datetime.min.time(), tzinfo=timezone.utc
+                        ).timestamp()
+                    )
+                except ValueError:
+                    created = 0
+            data.append(
+                {
+                    "id": recipe.name,
+                    "object": "model",
+                    "created": created,
+                    "owned_by": recipe.source.split("/", 1)[0] if "/" in recipe.source else "ollada",
+                }
+            )
+        return {"object": "list", "data": data}
 
     @app.post("/v1/chat/completions")
     def openai_chat(req: OpenAIChatRequest):
