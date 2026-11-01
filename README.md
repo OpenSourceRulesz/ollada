@@ -1,3 +1,5 @@
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/ollada?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/ollada)
+
 <p align="center">
   <img src="docs/assets/logo.svg" width="120" alt="Ollada logo — scattered dots settling into order: diffusion, denoised.">
 </p>
