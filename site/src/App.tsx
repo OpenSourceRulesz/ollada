@@ -252,7 +252,7 @@ const SHELF: M[] = [
   { n: "diffcoder:8b", use: "Coding", on: "Desktop RTX 5060 Ti (15.9 GB), Windows 11", date: "2026-10-25 · also T4 (Colab) 2026-10-21: 15.15 GB · tight fit, ~1.2 GB spare on a display-driving card", mem: "13.65 GB VRAM", peak: 13.65, spd: "~4.1 tok/s", kind: "gpu" },
   { n: "dream:7b", use: "General flagship", on: "Desktop RTX 5060 Ti (15.9 GB), Windows 11", date: "2026-10-25 · also T4 (Colab) 2026-10-21: 9.80 GB · noisy on the fixed set, see below", mem: "9.13 GB VRAM", peak: 9.13, spd: "~6.7 tok/s", kind: "gpu" },
   { n: "sdar:4b", use: "General, strongest per size", on: "Desktop RTX 5060 Ti (15.9 GB), Windows 11", date: "2026-10-25 · also T4 (Colab, High-RAM) 2026-10-21: 8.87 GB · also laptop CPU 2026-10-23: 8.6 GB host RAM, 63.5s / 2.4s / 16.2s, 4-step floor", mem: "8.34 GB VRAM", peak: 8.34, spd: "~12 tok/s", kind: "both" },
-  { n: "nemotron:3b", use: "NVIDIA tri-mode", on: "Intel Core Ultra 7 365 laptop, 32 GB, Windows 11", date: "2026-10-26 · CPU only · fixed set: Paris 17.9s, train 90 km/h ~60s, fib 19.0s · mini code eval 11/12", mem: "7.7 GB weights", peak: 7.66, spd: "—", kind: "cpu" },
+  { n: "nemotron:3b", use: "NVIDIA tri-mode", on: "Desktop RTX 5060 Ti (15.9 GB), Windows 11 · also laptop CPU", date: "2026-11-01 · desktop GPU: fixed set 3/3 (Paris, train 90 km/h, fib correct; no VRAM peak recorded) · laptop CPU 2026-10-26: Paris 17.9s, train 90 km/h ~60s, fib 19.0s · mini code eval 11/12", mem: "7.7 GB weights", peak: 7.66, spd: "—", kind: "both" },
   { n: "sdar:1.7b", use: "The CPU pick", on: "Intel Core Ultra 7 365 laptop, 32 GB, Windows 11", date: "2026-10-23 · CPU only", mem: "3.9 GB RAM", peak: 3.9, spd: "~6.1 tok/s", kind: "cpu" },
 ];
 function status(m: M, hw: string): [string, string] {
@@ -293,7 +293,7 @@ function Shelf() {
           </tbody>
         </table>
       </div>
-      <p className="fine">Peak memory is the latest measurement per model: desktop RTX 5060 Ti (2026-10-25) for the GPU models, laptop CPU (2026-10-23) for sdar:1.7b and (2026-10-26) for nemotron:3b. Speed is canvas tokens per second at the recipe defaults, measured by the Ollada project on T4 (2026-10-21) for the GPU models and on the laptop CPU for sdar:1.7b; nemotron:3b's speed is given as fixed-set times, not tok/s. The fit column is a simplified estimate (fits with 1 GB to spare, tight under that); <code>ollada recommend</code> uses the recorded measurements.</p>
+      <p className="fine">Peak memory is the latest measurement per model: desktop RTX 5060 Ti (2026-10-25) for diffcoder:8b, dream:7b and sdar:4b, laptop CPU (2026-10-23) for sdar:1.7b, and weights (7.66 GB, no GPU VRAM peak recorded) for nemotron:3b, whose desktop GPU run was 2026-11-01 and laptop CPU run was 2026-10-26. Speed is canvas tokens per second at the recipe defaults, measured by the Ollada project on T4 (2026-10-21) for the GPU models and on the laptop CPU for sdar:1.7b; nemotron:3b's speed is given as fixed-set times, not tok/s. The fit column is a simplified estimate (fits with 1 GB to spare, tight under that); <code>ollada recommend</code> uses the recorded measurements.</p>
     </section>
   );
 }
@@ -454,7 +454,7 @@ function GetStarted() {
           <CmdBlock text={venv} />
           <p><strong>Then run these one at a time, in order:</strong></p>
           <Flow items={cmdItems(CMDS.cpu)} numbered={false} />
-          <p className="fine">Check first: <code>pip show ollada</code> should say 0.3.2, and <code>ollada list</code> should show five models including sdar:1.7b. If it says 0.1.0, your Python is too new — go back to step 1 with 3.12. At the <code>&gt;&gt;&gt;</code> prompt, ask: What is the capital of France? Answer with exactly one word. Expect Paris. Ctrl-C quits. NVIDIA GPU? Same steps with <code>ollada[gpu]</code> instead.</p>
+          <p className="fine">Check first: <code>pip show ollada</code> should say 0.3.4, and <code>ollada list</code> should show five models including sdar:1.7b. If it says 0.1.0, your Python is too new — go back to step 1 with 3.12. At the <code>&gt;&gt;&gt;</code> prompt, ask: What is the capital of France? Answer with exactly one word. Expect Paris. Ctrl-C quits. NVIDIA GPU? Same steps with <code>ollada[gpu]</code> instead.</p>
         </li>
       </ol>
       <details>
@@ -544,7 +544,7 @@ export default function App() {
         <Band tone="shelf"><Shelf /></Band>
         <Band><section id="tested">
           <h2>Tested on real hardware</h2>
-          <p className="sub">Desktop RTX 5060 Ti (15.9 GB), 2026-10-25: all three GPU models fit. DiffCoder is tight, so close other GPU apps first. Dream’s output varies between runs. Full notes in <a href="https://github.com/OpenSourceRulesz/ollada/blob/main/docs/FINDINGS.md">Findings</a>.</p>
+          <p className="sub">Desktop RTX 5060 Ti (15.9 GB), 2026-10-25: all three GPU models fit. DiffCoder is tight, so close other GPU apps first. Dream’s output varies between runs. Nemotron joined them on the same card on 2026-11-01: fixed set 3/3, no VRAM peak recorded. Full notes in <a href="https://github.com/OpenSourceRulesz/ollada/blob/main/docs/FINDINGS.md">Findings</a>.</p>
           <details>
             <summary>Per-model findings</summary>
             <dl>
@@ -554,6 +554,8 @@ export default function App() {
             <dd>The morning fixed set passed clean (90 km/h, ‘Paris’, clean Fibonacci, about 30 s each), but wider runs on the same set failed twice on the train problem and once on Fibonacci. At temperature 0.2 that reads as sampling noise, not a deterministic break — but Dream is the variable one of the three.</dd>
             <dt>SDAR:4b — 8.34 GB, fits, peak stable across 15 observations</dt>
             <dd>Fixed set and variants all correct, and the server path works: POST /api/chat answered ‘Paris’ with done=True.</dd>
+            <dt>Nemotron:3b — desktop GPU 2026-11-01, fixed set 3/3, no VRAM peak recorded</dt>
+            <dd>Capital exactly ‘Paris’, train 90 km/h with clean working, fib iterative and correct. First capital run (88.4s) included the one-time worker-env build and the 7.66 GB weight download; later runs were 15.2s / 15.1s (train, repeated) and 13.3s (fib), times including cold load per CLI run. Use the ollada venv Python on this machine — system Python 3.12 lacks PyYAML and fails before any model work.</dd>
             <dt>Install findings</dt>
             <dd>A fresh [gpu] install lands transformers 5.x, which breaks Dream (use 4.57.6), and torch from plain PyPI was CUDA-blind on this card (use the PyTorch CUDA index). Both are encoded in the per-family worker environments.</dd>
           </dl>
@@ -571,7 +573,7 @@ export default function App() {
         </section></Band>
       </main>
       <Band tone="well" strip={false}><footer>
-        <p>Version 0.3.2 — five models verified on named hardware. Named the way Ollama was: Ollama ← LLaMA, Ollada ← LLaDA.</p>
+        <p>Version 0.3.4 — five models verified on named hardware. Named the way Ollama was: Ollama ← LLaMA, Ollada ← LLaDA.</p>
         <p><a href="https://github.com/OpenSourceRulesz/ollada">Source</a> · <a href="https://github.com/OpenSourceRulesz/ollada/blob/main/docs/FINDINGS.md">Findings</a> · <a href="https://github.com/OpenSourceRulesz/ollada/blob/main/docs/LIBRARY.md">Library</a> · <a href="https://pypi.org/project/ollada/">PyPI</a></p>
       </footer></Band>
     </div>
