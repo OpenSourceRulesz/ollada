@@ -438,3 +438,111 @@ machine and the laptop run answered the harder question anyway.
   crashing). No GPU-side re-verification was needed: the leak is
   in process startup, not in model execution, and the CPU paths
   prove the mechanism on both sides of it.
+
+## 12. Addendum (2026-11-01): infill prototypes on desktop GPU, and Nemotron on desktop GPU
+
+Standalone prototypes, not ollada main. Both were built 2026-10-31
+from code actually read (Dream's `_sample`, DiffCoder's
+`generate_block`), and both were run 2026-11-01 on a desktop
+RTX 5060 Ti (15.9 GB VRAM) through their family worker Pythons.
+The comparison is the same file and the same hole, both times.
+
+- **DiffCoder prompt-suffix fill, toy hole: clean, and watch matches
+  stock.** File `def add(a, b): <<HOLE>> return result`, stock and
+  `--watch` both `result = a + b`, 1.5s, 8 generated tokens before
+  EOS trim, prompt 108 tokens (chat template + system message).
+  The `--watch` path is a verbatim copy of upstream `generate_block`
+  with one added callback; at temperature 0.0 the identical fill
+  means the copy did not drift. Prefix and suffix byte-identical.
+- **Dream true-canvas fill, same hole: real mechanism, noisy code.**
+  Hole 12 tokens (canvas 23): 15.6s, fill `# Write your code here`
+  + `result = a + b`. Hole 8 tokens (canvas 19, matched to the
+  expected answer length): 15.5s, fill `global result` +
+  `result = a+b`. Prefix and suffix byte-identical in both runs,
+  so the canvas mechanism is real — but matched hole size did not
+  fix the code quality. Dream pads a fixed-length hole and, at
+  hole 8, invents a spurious `global`. For code infill, Dream is
+  not the model; DiffCoder is. The temperature flag passed by the
+  Dream prototype was ignored by upstream generation on both runs,
+  so neither Dream run was temperature-controlled as written.
+- **DiffCoder, real code: right logic, one real bug found.**
+  File `def calculate_total(prices): total = 0; <<HOLE>>; return
+  total`, prompt 114 tokens, 2.7s, 14 tokens: fill `for price in
+  prices: total += price`. No suffix duplication — `return total`
+  appears exactly once, so the boundary-leakage failure mode does
+  not fire here. But the spliced file is broken as written: the
+  continuation line sits at 4 spaces, not 8 under the `for`, so
+  the loop body is not indented. The prototype does not re-indent
+  continuation lines to the hole's indent level. Single-line
+  fills never showed this; multi-line fills need hole-indent
+  handling before this is usable for real code.
+- **Nemotron on desktop GPU: 3/3, closing §9's open claim.**
+  This corrects §9, which said no GPU verification had been run
+  for this model. Through the ollada venv Python (system
+  Python 3.12 lacks PyYAML, so `python -m ollada.cli` fails
+  before any model work — a setup trap, not a model failure):
+  capital exactly "Paris", train 90 km/h with clean working,
+  fib iterative and correct (wrapped in fences despite "only
+  output code"). Times include cold load per CLI run, and the
+  first capital run (88.4s) also includes the one-time worker-env
+  build and the 7.66 GB weight download; later runs were
+  15.2s / 15.1s (train, repeated) and 13.3s (fib). No VRAM peak
+  was recorded on this pass, and no tok/s figure is published
+  from CLI times alone, for the same reason as §9.
+
+## 13. Addendum (2026-11-01, evening): indent fix verified, failure modes, warm SDAR speed
+
+Same desktop (RTX 5060 Ti, 15.9 GB) as §12, same day, after §12
+was drafted. This section is the verification of the fixes and
+gaps §12 left open — it does not re-litigate §12's verdicts.
+
+- **Indent fix, verified.** The DiffCoder prototype gained
+  `reindent_fill` (first line untouched, non-empty continuation
+  lines get the hole indent added, blank lines untouched), after
+  §12's `calculate_total` run spliced a loop body at 4 spaces
+  instead of 8. Re-run, same file: fill `for price in prices:`
+  + `total += price` at 8 spaces, 2.6s, 14 tokens, `return total`
+  exactly once, `ast.parse` passes. The fix is unit-checked in
+  the sandbox on the exact fill as well as desktop-verified.
+  A second real-code file, `print_totals` (suffix `print(total)`
+  instead of a return), also passed cleanly: 2.3s, 11 tokens,
+  loop body at 8 spaces, `print(total)` reachable and correct.
+  The print-suffix pass clarifies §12's except-test result:
+  a return suffix invites the model to return early itself,
+  a print suffix does not — so the dead-suffix failure is
+  real in return-suffix context, not a universal suffix failure.
+- **Failure modes, DiffCoder only (Mercury's five, minus boundary
+  leakage, which §12 already passed).** All four named modes
+  were *not* fired: validation-before-mutation (22.2s, 146
+  tokens, validates before `user.email = data["email"]`, not
+  after); no config shadowing (2.5s, `cache[parsed] =
+  config["host"]`, no new `config` assignment); no invented
+  helper (3.7s, `result = amount * 1.1`, with an honest comment
+  that 10% is an assumption); no broad except (4.2s, plain
+  loop, no `except Exception: pass`). But 3 of 4 fills carry a
+  secondary problem that would break real code: the validate
+  fill uses undefined `re` and `User.query`; the collision fill
+  uses undefined `cache`; the except fill adds `return None`,
+  making the suffix `return user` dead and unreachable. The
+  honest verdict is therefore: DiffCoder avoids the named
+  failure modes, but is not yet reliable for real IDE use
+  without a verifier — undefined-name and dead-code-after-
+  return checks on every fill, the same shape as Mercury's
+  verifier loop, applied locally.
+- **Warm SDAR speed on the 5060, via `/api/chat` (load excluded).**
+  sdar:1.7b: capital Paris 0.459s, fib 1.193s. sdar:4b: capital
+  Paris 1.633s, fib 4.099s. Answers match the CLI runs in §12
+  (Paris, correct recursive fib). These are generation
+  durations, and they are the numbers to quote — not tok/s
+  computed from `eval_count`. `eval_count` here is canvas
+  size (131/130 for 1.7b, 259/258 for 4b), not answer tokens:
+  capital and fib share an `eval_count` but differ 2.6x in
+  duration, so dividing `eval_count` by duration would give a
+  nonsense figure (285 tok/s for a one-word answer). For
+  comparison, laptop CPU fib for sdar:1.7b was 6.3s, and CLI
+  on the 5060 (load included) was 10.7s / 17.0s for fib —
+  warm generation is roughly 5x faster than CPU for 1.7b.
+
+- **What §13 does not claim.** No VRAM peak was recorded on the
+  warm serve pass, and no tok/s figure is published from these
+  durations — the durations themselves are the measurement.
