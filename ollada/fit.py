@@ -152,6 +152,11 @@ def _detect_via_nvidia_smi(hw: Hardware) -> bool:
                 hw.vram_total_gb = float(total_mib) / 1024
                 hw.vram_free_gb = float(free_mib) / 1024
             except ValueError:
+                # Unified-memory GPUs such as GB10 report [N/A] for these
+                # fields. Keep GPU detection so workers install CUDA torch.
+                if parts[0] and parts[0].startswith("NVIDIA "):
+                    hw.gpu_name = parts[0]
+                    return True
                 continue
             hw.gpu_name = name
             return True
@@ -235,7 +240,10 @@ def assess(
         )
     if peak is None or hw.vram_total_gb is None:
         if hw.vram_total_gb is None:
-            report.notes.append("no GPU detected — VRAM verdict unavailable")
+            if hw.gpu_name:
+                report.notes.append("GPU detected, but memory total unavailable — VRAM verdict unavailable")
+            else:
+                report.notes.append("no GPU detected — VRAM verdict unavailable")
         return report
     if peak > hw.vram_total_gb:
         report.verdict = WONT_FIT

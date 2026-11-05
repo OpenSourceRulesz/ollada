@@ -15,6 +15,7 @@ from ollada.recipes import get_recipe
 from ollada.workers import (
     WorkerEnvError,
     _pip_packages,
+    cuda_torch_index,
     ensure_env,
     installed_transformers,
     list_envs,
@@ -46,6 +47,17 @@ def test_pip_packages_dedupe_and_pin():
     assert sdar_4b == sdar_17
     diffcoder = _pip_packages(get_recipe("diffcoder:8b"))
     assert "transformers==5.3.0" in diffcoder
+
+
+def test_gb10_uses_cuda_130_index_and_other_gpus_keep_default(monkeypatch):
+    monkeypatch.delenv("OLLADA_TORCH_INDEX_URL", raising=False)
+    assert cuda_torch_index(fit.Hardware(gpu_name="NVIDIA GB10")) == \
+        "https://download.pytorch.org/whl/cu130"
+    assert cuda_torch_index(fit.Hardware(gpu_name="RTX 5060 Ti")) == \
+        "https://download.pytorch.org/whl/cu128"
+    monkeypatch.setenv("OLLADA_TORCH_INDEX_URL", "https://example.test/torch")
+    assert cuda_torch_index(fit.Hardware(gpu_name="NVIDIA GB10")) == \
+        "https://example.test/torch"
 
 
 def test_ensure_env_builds_with_gpu_index_on_gpu_machine(monkeypatch, tmp_path):
