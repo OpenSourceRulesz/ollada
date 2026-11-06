@@ -3,6 +3,7 @@ chain (manager raises before creating an adapter; the API maps it to 409;
 options.force overrides). Hardware is fabricated; no GPU involved."""
 
 import pytest
+from types import SimpleNamespace
 
 from ollada import fit
 from ollada.recipes import Recipe, get_recipe
@@ -30,6 +31,16 @@ def hw(**kw) -> fit.Hardware:
     base = dict(gpu_name="Test GPU", vram_total_gb=16.0, vram_free_gb=15.0, ram_total_gb=32.0)
     base.update(kw)
     return fit.Hardware(**base)
+
+
+def test_unified_memory_gpu_is_detected_when_smi_memory_is_na(monkeypatch):
+    monkeypatch.setattr(fit.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(
+        returncode=0, stdout="NVIDIA GB10, [N/A], [N/A]\n"))
+    hardware = fit.Hardware(ram_total_gb=121.7)
+    assert fit._detect_via_nvidia_smi(hardware)
+    assert hardware.gpu_name == "NVIDIA GB10"
+    assert hardware.vram_total_gb is None
+    assert "GPU detected" in fit.assess(make_recipe(), hardware=hardware).notes[0]
 
 
 # -- peak trust order ---------------------------------------------------------

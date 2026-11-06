@@ -58,6 +58,18 @@ CPU_TORCH_INDEX = "https://download.pytorch.org/whl/cpu"
 # machine that installs torch from PyPI silently lands CPU torch, as
 # the desktop dream env did. CUDA wheels live on PyTorch's index.
 CUDA_TORCH_INDEX = "https://download.pytorch.org/whl/cu128"
+GB10_TORCH_INDEX = "https://download.pytorch.org/whl/cu130"
+
+
+def cuda_torch_index(hardware: fit.Hardware) -> str:
+    """Select a CUDA torch wheel that supports the detected GPU."""
+    override = os.environ.get("OLLADA_TORCH_INDEX_URL")
+    if override:
+        return override
+    # GB10 (SM 12.1) needs CUDA 13.0 wheels on Linux aarch64.
+    if hardware.gpu_name and "GB10" in hardware.gpu_name.upper():
+        return GB10_TORCH_INDEX
+    return CUDA_TORCH_INDEX
 
 
 class WorkerEnvError(RuntimeError):
@@ -317,7 +329,7 @@ def ensure_env(recipe: Recipe, _run=subprocess.run) -> Path:
         torch_pkgs = [p for p in pkgs if p == "torch"]
         rest = [p for p in pkgs if p != "torch"]
         _run_checked([str(python), "-m", "pip", "install",
-                      "--index-url", CUDA_TORCH_INDEX, *torch_pkgs],
+                      "--index-url", cuda_torch_index(hardware), *torch_pkgs],
                      f"install torch (CUDA index) for {family}", _run)
         if rest:
             _run_checked([str(python), "-m", "pip", "install", *rest],
