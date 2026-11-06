@@ -1,0 +1,36 @@
+# ollada Recipe (schema v1) — diffcoder:8b4bit
+# Same model as diffcoder:8b, loaded in 4-bit (BitsAndBytes NF4, weight-only)
+# instead of int8. The int8 entry stays untouched.
+# Name note: the recipe name regex allows only [a-z0-9.] after the colon,
+# so this is "8b4bit", not "8b-int4".
+name: diffcoder:8b4bit
+family: diffcoder
+source: ByteDance-Seed/Stable-DiffCoder-8B-Instruct
+license: MIT
+task: coding
+description: DiffCoder 8B in 4-bit (NF4 weight-only) — same coding model, ~7 GB peak, fits 8 GB-class cards with headroom on a 16 GB card.
+size_gb_bf16: 16.0
+quant_default: int4        # BitsAndBytesConfig(load_in_4bit=True); adapter already supports int4
+dtype: float16             # same as diffcoder:8b
+env:
+  transformers: "==5.3.0"  # same pin as diffcoder:8b
+  extras: [torch, accelerate, bitsandbytes]
+generate:
+  steps: 256               # same as diffcoder:8b; step-cut (128) was tested and NOT adopted (33/35)
+  gen_length: 256
+  block_length: 4
+  remasking: low_confidence
+  temperature: 0.0
+  threshold: null
+# NOT verified yet under PLAN.md §7: the numbers below were measured with
+# standalone Colab scripts loading the model directly, NOT through ollada's
+# own adapter code, and on an A100, not the desktop GPU. The `verified:`
+# block is deliberately left empty until a real ollada load on the
+# RTX 5060 Ti (fixed prompt set, measured peak VRAM) passes the gate.
+# The `colab_measured:` block below is site-builder data only, like
+# `desktop_verified:` in diffcoder-8b.yaml; the recipe loader ignores it.
+colab_measured:
+  hardware: "NVIDIA A100-SXM4-80GB (Colab)"
+  date: "2026-11-05"
+  vram_gb: 6.84            # HumanEval run peak; 6.98 on larger files, 7.08 on the more-tests run
+  notes: "4-bit (NF4 weight-only), standalone Colab scripts, steps 256 / gen 256 / block 4. HumanEval full 164: 133/164 = 81.1% (first 50: 46/50 = 92.0%, rest 114: 87/114 = 76.3%). HumanEval+ first 50: 44/50 = 88.0%. Benchmark 40 4-bit: 32/35 survival on the baseline passes only (not a full-40 4-bit run). Larger files 4-bit: 2/4 all-pass, 20/22 tests. MBPP sanitized 4-bit: NOT run (raw first-100 50/100 was a harness floor, not a true score). Step-cut (steps 128, 2/block): 33/35 survival, NOT adopted. Desktop 5060 Ti verification through ollada still pending."
