@@ -250,6 +250,7 @@ function Demo() {
 type M = { n: string; use: string; on: string; date: string; mem: string; peak: number; spd: string; kind: "gpu" | "both" | "cpu" };
 const SHELF: M[] = [
   { n: "diffcoder:8b", use: "Coding", on: "Desktop RTX 5060 Ti (15.9 GB), Windows 11", date: "2026-10-25 · also T4 (Colab) 2026-10-21: 15.15 GB · tight fit, ~1.2 GB spare on a display-driving card", mem: "13.65 GB VRAM", peak: 13.65, spd: "~4.1 tok/s", kind: "gpu" },
+  { n: "diffcoder:8b4bit", use: "Coding, fits 8 GB cards", on: "NVIDIA A100-SXM4-80GB (Colab)", date: "2026-11-06 · fixed set 3/3 — train 90 km/h 35.4s, Paris 18.7s, fib 26.2s · desktop 5060 Ti verification still pending", mem: "6.59 GB VRAM", peak: 6.59, spd: "—", kind: "gpu" },
   { n: "dream:7b", use: "General flagship", on: "Desktop RTX 5060 Ti (15.9 GB), Windows 11", date: "2026-10-25 · also T4 (Colab) 2026-10-21: 9.80 GB · noisy on the fixed set, see below", mem: "9.13 GB VRAM", peak: 9.13, spd: "~6.7 tok/s", kind: "gpu" },
   { n: "sdar:4b", use: "General, strongest per size", on: "Desktop RTX 5060 Ti (15.9 GB), Windows 11", date: "2026-10-25 · also T4 (Colab, High-RAM) 2026-10-21: 8.87 GB · also laptop CPU 2026-10-23: 8.6 GB host RAM, 63.5s / 2.4s / 16.2s, 4-step floor", mem: "8.34 GB VRAM", peak: 8.34, spd: "~12 tok/s", kind: "both" },
   { n: "nemotron:3b", use: "NVIDIA tri-mode", on: "Desktop RTX 5060 Ti (15.9 GB), Windows 11 · also laptop CPU", date: "2026-11-01 · desktop GPU: fixed set 3/3 (Paris, train 90 km/h, fib correct; no VRAM peak recorded) · laptop CPU 2026-10-26: Paris 17.9s, train 90 km/h ~60s, fib 19.0s · mini code eval 11/12", mem: "7.7 GB weights", peak: 7.66, spd: "—", kind: "both" },
@@ -266,7 +267,7 @@ function Shelf() {
   return (
     <section id="shelf">
       <h2>The shelf</h2>
-      <p className="sub">Five models, each run through Ollada’s own code on the hardware listed. Pick your machine to see what fits before you download anything.</p>
+      <p className="sub">Six models, each run through Ollada’s own code on the hardware listed. Pick your machine to see what fits before you download anything.</p>
       <div className="fit">
         <label htmlFor="hw">Your machine</label>
         <select id="hw" value={hw} onChange={(e) => setHw(e.target.value)}>
@@ -293,7 +294,7 @@ function Shelf() {
           </tbody>
         </table>
       </div>
-      <p className="fine">Peak memory is the latest measurement per model: desktop RTX 5060 Ti (2026-10-25) for diffcoder:8b, dream:7b and sdar:4b, laptop CPU (2026-10-23) for sdar:1.7b, and weights (7.66 GB, no GPU VRAM peak recorded) for nemotron:3b, whose desktop GPU run was 2026-11-01 and laptop CPU run was 2026-10-26. Speed is canvas tokens per second at the recipe defaults, measured by the Ollada project on T4 (2026-10-21) for the GPU models and on the laptop CPU for sdar:1.7b; nemotron:3b's speed is given as fixed-set times, not tok/s. The fit column is a simplified estimate (fits with 1 GB to spare, tight under that); <code>ollada recommend</code> uses the recorded measurements.</p>
+      <p className="fine">Peak memory is the latest measurement per model: desktop RTX 5060 Ti (2026-10-25) for diffcoder:8b, dream:7b and sdar:4b, A100 (Colab, 2026-11-06) for diffcoder:8b4bit, laptop CPU (2026-10-23) for sdar:1.7b, and weights (7.66 GB, no GPU VRAM peak recorded) for nemotron:3b, whose desktop GPU run was 2026-11-01 and laptop CPU run was 2026-10-26. Speed is canvas tokens per second at the recipe defaults, measured by the Ollada project on T4 (2026-10-21) for the GPU models and on the laptop CPU for sdar:1.7b; nemotron:3b's speed is given as fixed-set times, not tok/s. The fit column is a simplified estimate (fits with 1 GB to spare, tight under that); <code>ollada recommend</code> uses the recorded measurements.</p>
     </section>
   );
 }
@@ -454,7 +455,7 @@ function GetStarted() {
           <CmdBlock text={venv} />
           <p><strong>Then run these one at a time, in order:</strong></p>
           <Flow items={cmdItems(CMDS.cpu)} numbered={false} />
-          <p className="fine">Check first: <code>pip show ollada</code> should say 0.3.4, and <code>ollada list</code> should show five models including sdar:1.7b. If it says 0.1.0, your Python is too new — go back to step 1 with 3.12. At the <code>&gt;&gt;&gt;</code> prompt, ask: What is the capital of France? Answer with exactly one word. Expect Paris. Ctrl-C quits. NVIDIA GPU? Same steps with <code>ollada[gpu]</code> instead.</p>
+          <p className="fine">Check first: <code>pip show ollada</code> should say 0.3.5, and <code>ollada list</code> should show six models including sdar:1.7b. If it says 0.1.0, your Python is too new — go back to step 1 with 3.12. At the <code>&gt;&gt;&gt;</code> prompt, ask: What is the capital of France? Answer with exactly one word. Expect Paris. Ctrl-C quits. NVIDIA GPU? Same steps with <code>ollada[gpu]</code> instead.</p>
         </li>
       </ol>
       <details>
@@ -550,6 +551,8 @@ export default function App() {
             <dl>
             <dt>DiffCoder:8b — 13.65 GB, fits but tight (about 1.2 GB spare on a display-driving card)</dt>
             <dd>Fixed set steady; variants wobble: the 60/45 train problem came out 40 km/h (a 45/60 = 3/2 slip), a docstring Fibonacci was cut off at the 256-token canvas, and ‘one word’ without ‘exactly’ went verbose.</dd>
+            <dt>DiffCoder:8b4bit — 6.59 GB on an A100 (Colab), 2026-11-06, fixed set 3/3</dt>
+            <dd>Same model in 4-bit (NF4, weight-only): train 90 km/h in 35.4s, Paris in 18.7s, fib correct in 26.2s. Roughly half the int8 peak, so it fits an 8 GB card. Desktop 5060 Ti verification still pending. Independent 4-bit quality numbers (standalone Colab, not through ollada): HumanEval full 164 at 81.1%, HumanEval+ first 50 at 88.0% — the paper never tested 4-bit.</dd>
             <dt>Dream:7b — 9.13 GB, fits</dt>
             <dd>The morning fixed set passed clean (90 km/h, ‘Paris’, clean Fibonacci, about 30 s each), but wider runs on the same set failed twice on the train problem and once on Fibonacci. At temperature 0.2 that reads as sampling noise, not a deterministic break — but Dream is the variable one of the three.</dd>
             <dt>SDAR:4b — 8.34 GB, fits, peak stable across 15 observations</dt>
@@ -573,7 +576,7 @@ export default function App() {
         </section></Band>
       </main>
       <Band tone="well" strip={false}><footer>
-        <p>Version 0.3.4 — five models verified on named hardware. Named the way Ollama was: Ollama ← LLaMA, Ollada ← LLaDA.</p>
+        <p>Version 0.3.5 — six models verified on named hardware. Named the way Ollama was: Ollama ← LLaMA, Ollada ← LLaDA.</p>
         <p><a href="https://github.com/OpenSourceRulesz/ollada">Source</a> · <a href="https://github.com/OpenSourceRulesz/ollada/blob/main/docs/FINDINGS.md">Findings</a> · <a href="https://github.com/OpenSourceRulesz/ollada/blob/main/docs/LIBRARY.md">Library</a> · <a href="https://pypi.org/project/ollada/">PyPI</a></p>
       </footer></Band>
     </div>
