@@ -546,3 +546,94 @@ gaps §12 left open — it does not re-litigate §12's verdicts.
 - **What §13 does not claim.** No VRAM peak was recorded on the
   warm serve pass, and no tok/s figure is published from these
   durations — the durations themselves are the measurement.
+
+## 14. Addendum (2026-11-06): DiffCoder in 4-bit — half the VRAM, most of the quality
+
+The question was simple: does ByteDance's Stable-DiffCoder-8B
+(the shelf's coding model, `diffcoder:8b`) survive being cut to
+4-bit? The paper never tested it — a full-text check of
+arXiv:2601.15892 found zero mentions of quant, int4, int8,
+4-bit, 8-bit, bitsandbytes, NF4, GPTQ, or AWQ. It evaluates at
+full precision. So the 4-bit number below is ours, not the
+authors', and it is weight-only NF4 (bitsandbytes
+`load_in_4bit`): weights in 4 bits, activations still in 16-bit,
+not the harder W4A4 case.
+
+- **Verified through ollada, 2026-11-06.** `diffcoder:8b4bit`
+  (new recipe, same model, `quant_default: int4`, same generate
+  defaults: steps 256, gen 256, block 4), run through
+  `ollada run` on a Colab A100-SXM4-80GB: fixed set 3/3 —
+  train 90 km/h in 35.4s, capital Paris in 18.7s, fib correct
+  in 26.2s. Peak VRAM **6.59 GB** over 6 observations.
+  That is the recipe's `verified:` block, and it shipped in
+  ollada 0.3.5. It is an A100 verification, not a desktop
+  one — desktop 5060 Ti verification is still pending, and
+  the recipe says so.
+- **Half the VRAM.** The int8 entry peaks at 13.65 GB on the
+  desktop 5060 Ti (15.15 GB on a T4). The 4-bit peak of
+  6.59 GB is roughly half that, so it fits an 8 GB-class card
+  and leaves real headroom on a 16 GB card for an editor and
+  a browser, where int8 was tight. It is also about 2.6x
+  faster than int8 on the cases re-run at 4-bit (102.3s vs
+  ~264s for the same 35 passes).
+- **Quality, independent 4-bit runs (standalone Colab scripts,
+  A100, not through ollada).** HumanEval, full 164 problems,
+  pass@1: **133/164 = 81.1%** — first 50 at 46/50 = 92.0%,
+  the rest at 87/114 = 76.3%. Do not compare that directly
+  to the paper's 86.6%: that is full-precision, author-run.
+  The first-50 failures are genuine logic errors, not
+  harness errors (make_palindrome off-by-one, remove_duplicates
+  wrong uniqueness rule, find_zero bisection flaw,
+  car_race_collision wrong formula). Under the stricter
+  HumanEval+ tests the same first 50 held at 44/50 = 88.0%,
+  so it was not just passing weak tests. An earlier 27/50
+  figure was a harness floor (the scorer exec'd only the
+  generated code, not the prompt that supplies its imports
+  and helpers) and is superseded — never quote it.
+- **Fixing, not just generating.** On a 40-case single-function
+  benchmark the int8 baseline is 35/40, syntax 100%, tests
+  93.4%. The 4-bit model, re-run over the 35 baseline passes
+  only, kept 32/35 — the three drops were c_to_f (verbose,
+  truncated), parse_price (int cents instead of float),
+  and percent (error string on zero total instead of 0.0).
+  On larger multi-function files (59–82 lines, 3–4 planted
+  bugs each) 4-bit fixed 2/4 files all-pass, 20/22 tests,
+  with the misses a subtle operator and an in-place mutation.
+  MBPP was not properly measured: the raw first-100 run
+  (50/100) is a harness floor — the prompt gave function
+  names only, no signatures, so helper-plus-main problems
+  failed with NameError — and the fixed sanitized run was
+  built but not run. Do not quote an MBPP score for this model.
+- **What was tried and NOT adopted.** A true step cut (steps
+  128, gen 256, block 4 — 2 steps per block instead of 4)
+  survived 33/35, dropping average2 and parse_price, for a
+  ~28% time saving; the pre-set rule was adopt only on 35/35,
+  so it is not the default. Mercury's "resilient utility"
+  framing, prepended to the prompt, was a net loss: 28/40
+  against the 35/40 baseline, fixing 4 targets but breaking
+  11 passes by over-generalising "return None on
+  empty/undersized" — gold fallbacks are often 0, 0.0, or "".
+  Neither is combined with the 4-bit entry.
+- **Two Colab lessons from the verification run.** First, the
+  fit check uses the unverified 16 GB bf16 size estimate, so
+  it refuses on any card under ~17 GB — including a T4
+  (14.6 GB) and the desktop 5060 Ti (15.9 GB) — and the
+  first load needs `--force`. After that load the local
+  measurement record (~7 GB) fixes fit for later loads.
+  Second, `ollada workers rebuild` fails on Colab:
+  `python -m venv` dies at ensurepip, leaving a half-built
+  env. The run that verified the model used Colab's own
+  python as the worker instead (transformers==5.3.0,
+  accelerate, bitsandbytes, pyyaml installed into it, worker
+  python symlinked to it) — a setup ollada's worker code
+  documents as supported. The underlying bug is real and
+  still open in ollada: the worker builder should handle a
+  venv ensurepip failure instead of dying.
+
+- **What §14 does not claim.** No desktop 5060 Ti number yet;
+  the 6.59 GB peak is A100-measured. No multi-file codebase
+  test yet — everything so far is single functions or single
+  files up to ~80 lines. No MBPP score. And "best open
+  diffusion coder" is the paper's claim and the shelf's
+  working position, not a head-to-head we ran against every
+  other diffusion coder.
