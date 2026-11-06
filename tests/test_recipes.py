@@ -2,14 +2,16 @@ import pytest
 
 from ollada.recipes import RecipeError, get_recipe, load_catalog, validate_recipe
 
-EXPECTED_SHELF = {"dream:7b", "sdar:4b", "diffcoder:8b", "sdar:1.7b", "nemotron:3b"}
+EXPECTED_SHELF = {"dream:7b", "sdar:4b", "diffcoder:8b", "sdar:1.7b", "nemotron:3b", "diffcoder:8b4bit"}
 
 
 def test_shelf_verified_models_present_and_extras_unverified():
     # The MVP three (T4-verified) plus sdar:1.7b, added 2026-10-23 as
     # the CPU tier's first entry, plus nemotron:3b, added 2026-10-26 as
     # the shelf's second CPU-verified entry (laptop-CPU-verified, see
-    # its recipe). The verified shelf must all be present; anything
+    # its recipe), plus diffcoder:8b4bit, added 2026-11-06 as the
+    # shelf's sixth entry (A100-verified through ollada run, see its
+    # recipe; desktop 5060 Ti verification still pending). The verified shelf must all be present; anything
     # else in the catalog must be UNVERIFIED — it joins the shelf only
     # by earning a verification block, never by landing in the catalog.
     recipes = {r.name: r for r in load_catalog()}

@@ -22,13 +22,19 @@ generate:
   remasking: low_confidence
   temperature: 0.0
   threshold: null
-# NOT verified yet under PLAN.md §7: the numbers below were measured with
-# standalone Colab scripts loading the model directly, NOT through ollada's
-# own adapter code, and on an A100, not the desktop GPU. The `verified:`
-# block is deliberately left empty until a real ollada load on the
-# RTX 5060 Ti (fixed prompt set, measured peak VRAM) passes the gate.
+# Verified under PLAN.md §7 through ollada's own code on 2026-11-06:
+# `ollada run` via the diffcoder worker on a Colab A100, fixed set 3/3
+# (train 90 km/h in 35.4s, capital Paris in 18.7s, fib correct in 26.2s),
+# peak VRAM 6.59 GB over 6 observations. Desktop 5060 Ti verification
+# through ollada is still pending — this is an A100 verification, not a
+# desktop one, and the hardware label says so.
 # The `colab_measured:` block below is site-builder data only, like
 # `desktop_verified:` in diffcoder-8b.yaml; the recipe loader ignores it.
+verified:
+  hardware: "NVIDIA A100-SXM4-80GB (Colab)"
+  date: "2026-11-06"
+  vram_gb: 6.59
+  notes: "Verified through ollada run (diffcoder worker, transformers 5.3.0, NF4 weight-only), fixed set 3/3: train 90 km/h (35.4s), capital Paris (18.7s), fib correct (26.2s). Peak VRAM 6.59 GB over 6 observations. Desktop 5060 Ti verification still pending."
 colab_measured:
   hardware: "NVIDIA A100-SXM4-80GB (Colab)"
   date: "2026-11-05"
