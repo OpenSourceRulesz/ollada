@@ -626,9 +626,13 @@ not the harder W4A4 case.
   python as the worker instead (transformers==5.3.0,
   accelerate, bitsandbytes, pyyaml installed into it, worker
   python symlinked to it) — a setup ollada's worker code
-  documents as supported. The underlying bug is real and
-  still open in ollada: the worker builder should handle a
-  venv ensurepip failure instead of dying.
+  documents as supported. The underlying bug is fixed locally,
+  unreleased: the worker builder now retries a failed venv
+  creation with `--without-pip` plus a get-pip.py bootstrap, and
+  removes the half-built env on any failure, so the next run
+  retries cleanly instead of misreporting "missing packages"
+  (ollada/workers.py `_create_venv`, 3 new tests in
+  tests/test_workers.py).
 
 - **What §14 does not claim.** No desktop 5060 Ti number yet;
   the 6.59 GB peak is A100-measured. No multi-file codebase

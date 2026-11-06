@@ -29,6 +29,11 @@ explicit `ollada workers rebuild <model>`. A missing package in an
 existing env (built before the union rule, or by hand) refuses the same
 way, with the same rebuild pointer.
 
+A venv creation that fails at ensurepip (Colab, 2026-11-06) retries
+with --without-pip plus a get-pip.py bootstrap, and a failed build
+never leaves a half-built env behind for the next run to misread as
+"missing packages".
+
 Torch index: on a machine with no NVIDIA GPU (nvidia-smi absent), torch
 comes from the CPU index instead of the ~2GB CUDA bundle — the same tip
 the README gives for manual installs, applied automatically. A GPU
@@ -41,6 +46,8 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
+import urllib.request
 from pathlib import Path
 
 from ollada import fit
@@ -174,6 +181,81 @@ def _run_checked(argv: list[str], what: str, _run=subprocess.run) -> None:
             f"could not {what} (exit {proc.returncode}): " + " | ".join(tail))
 
 
+def _bootstrap_pip(python: Path, _run=subprocess.run) -> None:
+    """Install pip into a --without-pip venv via get-pip.py.
+
+    Standard recovery when a venv's own ensurepip is broken (Colab,
+    2026-11-06: `python -m venv` dies at ensurepip, so the plain build
+    never reaches any pip install). Downloads get-pip.py from
+    bootstrap.pypa.io and runs it with the venv python. Raises
+    WorkerEnvError if the download or the run fails.
+    """
+    url = "https://bootstrap.pypa.io/get-pip.py"
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            script = Path(tmp) / "get-pip.py"
+            urllib.request.urlretrieve(url, script)
+            _run_checked([str(python), str(script)],
+                         "bootstrap pip into the worker env", _run)
+    except WorkerEnvError:
+        raise
+    except Exception as exc:
+        raise WorkerEnvError(
+            f"could not bootstrap pip into the worker env: {exc}") from exc
+
+
+def _create_venv(family: str, _run=subprocess.run) -> Path:
+    """Create a family's worker venv, surviving a broken ensurepip.
+
+    Plain `python -m venv` fails on some Pythons at ensurepip — Colab,
+    2026-11-06, where it died before installing anything and left a
+    half-built env behind, so every later run misreported the failure
+    as "missing packages". On a venv failure this removes the half-built
+    dir, retries with --without-pip, and bootstraps pip via get-pip.py.
+    If any step fails the half-built dir is removed again and a
+    WorkerEnvError names venv creation as the problem, so the next run
+    retries cleanly instead of tripping over the wreckage. Returns the
+    venv python.
+    """
+    root = venv_path(family)
+    try:
+        proc = _run([sys.executable, "-m", "venv", str(root)],
+                    capture_output=True, text=True)
+    except Exception as exc:
+        raise WorkerEnvError(
+            f"could not create worker env for {family}: {exc}") from exc
+    if proc.returncode == 0:
+        return venv_python(family)
+    # ensurepip (or the venv module) failed — retry without pip, then
+    # bootstrap it. Remove the half-built env first: a venv dir with a
+    # python but no packages is what turns this into a misleading
+    # "missing packages" refusal on the next run.
+    shutil.rmtree(root, ignore_errors=True)
+    try:
+        proc = _run([sys.executable, "-m", "venv", "--without-pip", str(root)],
+                    capture_output=True, text=True)
+    except Exception as exc:
+        raise WorkerEnvError(
+            f"could not create worker env for {family}: {exc}") from exc
+    if proc.returncode != 0:
+        tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-5:]
+        detail = " | ".join(tail) or "no output"
+        shutil.rmtree(root, ignore_errors=True)
+        raise WorkerEnvError(
+            f"could not create worker env for {family}: this Python cannot "
+            f"build venvs ({detail}). Workaround: use this Python itself "
+            f"as the worker — symlink {venv_python(family)} at it after "
+            f"installing transformers, accelerate, bitsandbytes and "
+            f"pyyaml (the Colab workaround, docs/FINDINGS.md §14).")
+    python = venv_python(family)
+    try:
+        _bootstrap_pip(python, _run)
+    except WorkerEnvError:
+        shutil.rmtree(root, ignore_errors=True)
+        raise
+    return python
+
+
 def ensure_env(recipe: Recipe, _run=subprocess.run) -> Path:
     """Return the venv python for a family's worker env, building if needed.
 
@@ -210,15 +292,7 @@ def ensure_env(recipe: Recipe, _run=subprocess.run) -> Path:
     # Fresh build. _run is a test seam for every subprocess call here so
     # tests can observe the venv creation and pip installs without network.
     print(f"building worker env for {family} (one-time download) ...")
-    try:
-        proc = _run([sys.executable, "-m", "venv", str(venv_path(family))],
-                    capture_output=True, text=True)
-    except Exception as exc:
-        raise WorkerEnvError(f"could not create worker env for {family}: {exc}") from exc
-    if proc.returncode != 0:
-        tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-5:]
-        raise WorkerEnvError(
-            f"could not create worker env for {family}: " + " | ".join(tail))
+    python = _create_venv(family, _run)
     pkgs = _pip_packages(recipe)
     # Fresh detection at build time: never inherit a stale cached
     # result from an earlier call in this process — a transient

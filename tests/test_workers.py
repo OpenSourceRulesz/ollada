@@ -149,6 +149,78 @@ def test_ensure_env_gpu_build_refuses_when_installed_torch_has_no_cuda(monkeypat
         ensure_env(get_recipe("dream:7b"), _run=_no_cuda_run)
 
 
+def test_ensure_env_recovers_when_venv_ensurepip_fails(monkeypatch, tmp_path):
+    # Colab 2026-11-06: `python -m venv` dies at ensurepip, leaving a
+    # half-built env; the build must retry with --without-pip and
+    # bootstrap pip, not die the same way.
+    monkeypatch.setenv("OLLADA_WORKERS_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        fit, "detect_hardware",
+        lambda refresh=False: fit.Hardware(gpu_name="Test GPU", vram_total_gb=16.0))
+    monkeypatch.setattr("urllib.request.urlretrieve",
+                        lambda url, path: Path(path).write_text("# get-pip stub"))
+    calls = []
+
+    def _colab_run(argv, **kwargs):
+        calls.append(argv)
+        if argv[1:3] == ["-m", "venv"] and "--without-pip" not in argv:
+            return SimpleNamespace(returncode=1, stdout="", stderr="ensurepip failed")
+        stdout = "True" if any(
+            "torch.cuda.is_available()" in str(a) for a in argv) else ""
+        return SimpleNamespace(returncode=0, stdout=stdout, stderr="")
+
+    python = ensure_env(get_recipe("dream:7b"), _run=_colab_run)
+    assert python == venv_python("dream")
+    venv_calls = [c for c in calls if c[1:3] == ["-m", "venv"]]
+    assert venv_calls[0] == [sys.executable, "-m", "venv", str(venv_path("dream"))]
+    assert "--without-pip" in venv_calls[1]
+    # get-pip.py ran with the venv python before any pip install.
+    getpip = [c for c in calls if c[-1].endswith("get-pip.py")]
+    assert len(getpip) == 1 and getpip[0][0] == str(python)
+    assert any("pip" in c for c in calls[calls.index(getpip[0]) + 1:])
+
+
+def test_ensure_env_venv_failure_twice_raises_and_cleans_up(monkeypatch, tmp_path):
+    # If even --without-pip fails, the error must name venv creation
+    # and no half-built dir may survive for the next run to misread.
+    monkeypatch.setenv("OLLADA_WORKERS_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        fit, "detect_hardware",
+        lambda refresh=False: fit.Hardware(gpu_name="Test GPU", vram_total_gb=16.0))
+
+    def _fail_venv(argv, **kwargs):
+        if argv[1:3] == ["-m", "venv"]:
+            family_dir = venv_path("dream")
+            (family_dir / "bin").mkdir(parents=True)
+            (family_dir / "bin" / "python").touch()
+        return SimpleNamespace(returncode=1, stdout="", stderr="ensurepip failed")
+
+    with pytest.raises(WorkerEnvError, match="cannot build venvs"):
+        ensure_env(get_recipe("dream:7b"), _run=_fail_venv)
+    assert not venv_path("dream").exists()
+
+
+def test_ensure_env_pip_bootstrap_failure_cleans_up(monkeypatch, tmp_path):
+    # Plain venv fails, --without-pip succeeds, but get-pip.py cannot
+    # be fetched: same rule — clear error, no half-built dir left.
+    monkeypatch.setenv("OLLADA_WORKERS_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        fit, "detect_hardware",
+        lambda refresh=False: fit.Hardware(gpu_name="Test GPU", vram_total_gb=16.0))
+    monkeypatch.setattr(
+        "urllib.request.urlretrieve",
+        lambda url, path: (_ for _ in ()).throw(RuntimeError("no network")))
+
+    def _no_network_run(argv, **kwargs):
+        if argv[1:3] == ["-m", "venv"] and "--without-pip" not in argv:
+            return SimpleNamespace(returncode=1, stdout="", stderr="ensurepip failed")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    with pytest.raises(WorkerEnvError, match="bootstrap pip"):
+        ensure_env(get_recipe("dream:7b"), _run=_no_network_run)
+    assert not venv_path("dream").exists()
+
+
 def test_rebuild_deletes_then_builds(monkeypatch, tmp_path):
     monkeypatch.setenv("OLLADA_WORKERS_DIR", str(tmp_path))
     marker = venv_path("dream") / "marker.txt"
