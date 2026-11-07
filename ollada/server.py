@@ -9,6 +9,11 @@ Endpoints:
   POST /api/generate              (Ollama-shaped, single prompt)
   GET  /v1/models                 (OpenAI-shaped model list)
   POST /v1/chat/completions       (OpenAI-shaped, final text only in v0.1)
+  POST /v1/completions            (OpenAI-shaped, prompt-only for now:
+                                   no suffix/FIM support — a suffix field
+                                   is accepted and ignored, not honoured,
+                                   so editors using it for infill will get
+                                   a plain completion, not a middle fill)
 """
 
 from __future__ import annotations
@@ -41,8 +46,17 @@ try:
         messages: list[dict]
         options: dict | None = None
 
+    class OpenAICompletionRequest(BaseModel):
+        model: str
+        prompt: str
+        suffix: str | None = None  # accepted, ignored: no FIM yet, see route below
+        max_tokens: int | None = None
+        temperature: float | None = None
+        top_p: float | None = None
+        options: dict | None = None
+
 except ImportError:  # server extra not installed; create_app will raise properly
-    ChatRequest = GenerateRequest = OpenAIChatRequest = None  # type: ignore
+    ChatRequest = GenerateRequest = OpenAIChatRequest = OpenAICompletionRequest = None  # type: ignore
 
 
 def create_app(manager: ModelManager | None = None):
@@ -164,6 +178,39 @@ def create_app(manager: ModelManager | None = None):
                 }
             )
         return {"object": "list", "data": data}
+
+    @app.post("/v1/completions")
+    def openai_completions(req: OpenAICompletionRequest):
+        # Minimal completions, not FIM: the prompt is run as a single
+        # user chat message through the same adapter as /v1/chat/completions.
+        # A suffix, if sent, is deliberately NOT honoured — returning a
+        # plain completion is honest, silently treating a suffix as
+        # conditioning (true FIM) would not be, and that endpoint is
+        # still pending. Editors that depend on suffix-aware infill
+        # will get a completion that may duplicate the suffix; they
+        # should use /v1/chat/completions with the full context instead
+        # until FIM lands.
+        opts = dict(req.options or {})
+        if req.max_tokens is not None:
+            opts.setdefault("gen_length", req.max_tokens)
+        if req.temperature is not None:
+            opts.setdefault("temperature", req.temperature)
+        if req.top_p is not None:
+            opts.setdefault("top_p", req.top_p)
+        result = run_chat(req.model, [{"role": "user", "content": req.prompt}], opts or None)
+        return {
+            "id": f"cmpl-ollada-{int(time.time())}",
+            "object": "text_completion",
+            "model": req.model,
+            "choices": [
+                {
+                    "index": 0,
+                    "text": result.text,
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {"completion_tokens": result.tokens},
+        }
 
     @app.post("/v1/chat/completions")
     def openai_chat(req: OpenAIChatRequest):
