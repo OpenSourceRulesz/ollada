@@ -1,0 +1,26 @@
+[package]
+name = "ollada-rs"
+version = "0.1.0"
+edition = "2021"
+description = "Ollada Rust front-end: read-only shell (list / show / recommend / ps / rm) plus the fit check, worker env management, the model manager speaking the JSON-lines worker protocol, and the axum HTTP server. The Python implementation stays the reference; this crate must match its output."
+license = "MIT"
+
+[[bin]]
+name = "ollada-rs"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.6.7", features = ["derive"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", features = ["preserve_order"] }
+serde_yaml = "0.9.34"
+sysinfo = "0.40.1"
+# Unix SIGTERM for worker termination (and the atexit handler that
+# kills stragglers); already a transitive dependency via sysinfo.
+libc = "0.2"
+axum = "0.8"
+tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread", "net"] }
+
+[dev-dependencies]
+# Router::oneshot in the server tests.
+tower = { version = "0.5.3", features = ["util"] }
