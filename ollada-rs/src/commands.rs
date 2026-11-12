@@ -21,7 +21,7 @@ use crate::manager::{ChatMessage, ManagerError, ModelManager};
 use crate::measurements::{load_record, measurements_dir};
 use crate::pyrepr::{py_float, py_json, py_yaml};
 use crate::recipes::{get_recipe, load_catalog, Recipe, RecipeError};
-use crate::workers::{list_envs, rebuild_env, Runner, WorkerEnvError};
+use crate::workers::{list_envs, rebuild_env, system_python, Runner, WorkerEnvError};
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -47,6 +47,67 @@ pub type CmdResult<T> = Result<T, CmdError>;
 
 fn write_line(out: &mut dyn Write, line: &str) {
     let _ = writeln!(out, "{line}");
+}
+
+/// `ollada pull <name>` — the one command with no Rust implementation.
+/// Downloading weights is the Python `huggingface-hub` path, so this
+/// shells out to `python -m ollada.cli pull <name>` with stdio
+/// inherited and passes the exit code through. The interpreter is the
+/// Python next to this binary (the venv Python in a wheel install),
+/// else `system_python()` (`$OLLADA_PYTHON`, then PATH). Returns 2
+/// with a clear error when no Python can be found.
+pub fn cmd_pull(name: &str) -> i32 {
+    cmd_pull_with(name, || {
+        python_next_to_exe().or_else(|| system_python().ok())
+    })
+}
+
+/// `cmd_pull` with the interpreter lookup injected, so tests can pass a
+/// fake Python without touching process-global state.
+fn cmd_pull_with(name: &str, resolve: impl FnOnce() -> Option<PathBuf>) -> i32 {
+    let Some(python) = resolve() else {
+        eprintln!(
+            "error: no Python found to run `pull` — install Python or set OLLADA_PYTHON to a Python with ollada installed"
+        );
+        return 2;
+    };
+    match std::process::Command::new(&python)
+        .args(["-m", "ollada.cli", "pull", name])
+        .status()
+    {
+        Ok(status) => status.code().unwrap_or(1),
+        Err(e) => {
+            eprintln!("error: could not run {}: {e}", python.display());
+            2
+        }
+    }
+}
+
+/// A Python next to this binary: in a wheel install the venv Python
+/// lives in the same bin/Scripts directory as the `ollada` binary.
+/// Matches `python`, `python3`, and versioned `python3.x` names.
+fn python_next_to_exe() -> Option<PathBuf> {
+    let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+    let entries = std::fs::read_dir(&dir).ok()?;
+    // Prefer an exact `python` first, then `python3`, then versioned.
+    let mut versioned: Option<PathBuf> = None;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        let lower = name.to_ascii_lowercase();
+        if lower == "python" || lower == "python.exe" {
+            return Some(entry.path());
+        }
+        if lower == "python3" || lower == "python3.exe" {
+            return Some(entry.path());
+        }
+        if lower.starts_with("python3.") && versioned.is_none() {
+            versioned = Some(entry.path());
+        }
+    }
+    versioned
 }
 
 /// `ollada list` — mirrors `_cmd_list`.
@@ -471,7 +532,10 @@ fn print_manager_error(e: &ManagerError, err: &mut dyn Write) -> i32 {
 
 /// Resolve the catalog directory: `$OLLADA_CATALOG_DIR`, else walk up
 /// from the executable looking for `ollada/catalog` (the repo layout),
-/// else `./ollada/catalog` from the working directory, else `./catalog`.
+/// else `./ollada/catalog` from the working directory, else ask the
+/// Python next to this binary where the installed `ollada` package
+/// lives (a wheel install puts the catalog in site-packages, which no
+/// exe-relative walk can find), else `./catalog`.
 pub fn resolve_catalog_dir() -> PathBuf {
     if let Ok(dir) = std::env::var("OLLADA_CATALOG_DIR") {
         if !dir.is_empty() {
@@ -496,7 +560,40 @@ pub fn resolve_catalog_dir() -> PathBuf {
     if cwd_catalog.is_dir() {
         return cwd_catalog;
     }
+    if let Some(dir) = catalog_dir_via_python() {
+        return dir;
+    }
     PathBuf::from("catalog")
+}
+
+/// Catalog dir via the installed Python package: ask the Python next
+/// to this binary (the venv Python in a wheel install) where `ollada`
+/// lives. Returns None when there is no such Python or it cannot
+/// import ollada — the caller falls back to `./catalog`.
+fn catalog_dir_via_python() -> Option<PathBuf> {
+    let python = python_next_to_exe().or_else(|| system_python().ok())?;
+    catalog_dir_via_python_with(&python)
+}
+
+/// `catalog_dir_via_python` with the interpreter injected, for tests.
+fn catalog_dir_via_python_with(python: &Path) -> Option<PathBuf> {
+    let out = std::process::Command::new(python)
+        .args([
+            "-c",
+            "import ollada, pathlib; print(pathlib.Path(ollada.__file__).parent / 'catalog')",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let path = String::from_utf8(out.stdout).ok()?;
+    let dir = PathBuf::from(path.trim());
+    if dir.is_dir() {
+        Some(dir)
+    } else {
+        None
+    }
 }
 
 /// Detect hardware the way the live commands do.
@@ -835,6 +932,81 @@ mod tests {
         );
         // "/lengthwise" is not the command.
         assert_eq!(parse_length_command("/lengthwise 5").unwrap(), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn catalog_dir_via_python_asks_the_interpreter() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join("ollada-rs-test-catalog-via-python");
+        let _ = std::fs::create_dir_all(&dir);
+        let script = dir.join("fake-python");
+        std::fs::write(&script, format!("#!/bin/sh\necho {}\n", dir.display())).unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(catalog_dir_via_python_with(&script), Some(dir));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn catalog_dir_via_python_returns_none_when_python_fails() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join("ollada-rs-test-catalog-via-python-fail");
+        let _ = std::fs::create_dir_all(&dir);
+        let script = dir.join("fake-python");
+        std::fs::write(&script, "#!/bin/sh\nexit 1\n").unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(catalog_dir_via_python_with(&script), None);
+        let script2 = dir.join("fake-python-2");
+        std::fs::write(&script2, "#!/bin/sh\necho /nonexistent/catalog\n").unwrap();
+        std::fs::set_permissions(&script2, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(catalog_dir_via_python_with(&script2), None);
+    }
+
+    #[test]
+    fn pull_without_python_is_a_clean_error() {
+        assert_eq!(cmd_pull_with("sdar:1.7b", || None), 2);
+    }
+
+    #[test]
+    fn pull_with_unrunnable_python_is_a_clean_error() {
+        assert_eq!(
+            cmd_pull_with("sdar:1.7b", || Some(PathBuf::from("/nonexistent/python"))),
+            2
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pull_shells_out_to_python_with_the_right_args() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join("ollada-rs-test-pull");
+        let _ = std::fs::create_dir_all(&dir);
+        let seen = dir.join("args.txt");
+        let script = dir.join("fake-python");
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\nexit 0\n",
+                seen.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(cmd_pull_with("sdar:1.7b", || Some(script)), 0);
+        let recorded = std::fs::read_to_string(&seen).unwrap();
+        assert_eq!(recorded, "-m\nollada.cli\npull\nsdar:1.7b\n");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pull_passes_through_a_nonzero_exit_code() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join("ollada-rs-test-pull-fail");
+        let _ = std::fs::create_dir_all(&dir);
+        let script = dir.join("fake-python");
+        std::fs::write(&script, "#!/bin/sh\nexit 3\n").unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(cmd_pull_with("sdar:1.7b", || Some(script)), 3);
     }
 
     #[test]

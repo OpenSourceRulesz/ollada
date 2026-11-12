@@ -10,7 +10,11 @@
 //! `commands.rs` and `server.rs`).
 //!
 //! Usage differences from the Python CLI, all deliberate:
-//! - the binary is named `ollada-rs`, so `--version` prints that name;
+//! - the binary is named `ollada` (it IS the `ollada` command when
+//!   installed from the wheel); `--version` prints `ollada 0.3.7`;
+//! - `pull` shells out to `python -m ollada.cli pull` (see
+//!   `commands::cmd_pull`): downloading weights is the Python
+//!   `huggingface-hub` path, and this crate has none of its own;
 //! - hardware detection has no torch path (see `fit.rs`);
 //! - the catalog is found via `$OLLADA_CATALOG_DIR`, or by walking up
 //!   from the executable to `ollada/catalog` (the repo layout), or
@@ -20,7 +24,7 @@
 //! - `run` has no live canvas watch or spinner (see `commands.rs`);
 //!   the answer and the `({elapsed:.1f}s)` footer match Python's
 //!   piped output exactly.
-//! - `serve` reports the ollada version (0.3.6, from
+//! - `serve` reports the ollada version (0.3.7, from
 //!   `ollada/__init__.py`) on its API, not the crate version.
 
 mod cache;
@@ -40,7 +44,7 @@ use std::sync::Arc;
 
 #[derive(Parser)]
 #[command(
-    name = "ollada-rs",
+    name = "ollada",
     version,
     about = "Ollada Rust front-end (read-only shell + worker envs + model manager + HTTP server). The shelf for open-source diffusion language models — pull, run, and serve dLLMs locally, Ollama-style."
 )]
@@ -55,6 +59,8 @@ enum Command {
     List,
     /// Show one model's recipe.
     Show { name: String },
+    /// Download a model's weights (via the Python CLI — see cmd_pull).
+    Pull { name: String },
     /// Chat with a model (one-shot with a prompt arg).
     Run {
         name: String,
@@ -127,6 +133,7 @@ fn main() {
                 Err(e) => fail(&e.0),
             }
         }
+        Command::Pull { name } => commands::cmd_pull(&name),
         Command::Run {
             name,
             prompt,

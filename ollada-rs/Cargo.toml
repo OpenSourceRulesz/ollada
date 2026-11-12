@@ -1,12 +1,24 @@
 [package]
 name = "ollada-rs"
-version = "0.1.0"
+# Kept in sync with the Python package (ollada/__init__.py): maturin
+# merges the two versions with pyproject taking precedence, and the
+# binary's --version prints this, so they must agree.
+version = "0.3.7"
 edition = "2021"
 description = "Ollada Rust front-end: read-only shell (list / show / recommend / ps / rm) plus the fit check, worker env management, the model manager speaking the JSON-lines worker protocol, and the axum HTTP server. The Python implementation stays the reference; this crate must match its output."
 license = "MIT"
+repository = "https://github.com/OpenSourceRulesz/ollada"
+homepage = "https://opensourcerulesz.github.io/ollada"
+documentation = "https://opensourcerulesz.github.io/ollada"
 
+# The binary IS the `ollada` command: maturin installs it next to the
+# Python package, and the Python entry point (`ollada.cli:main`) only
+# runs when the binary is absent. A separate `ollada-rs` name is not
+# possible — maturin refuses a wheel that defines both console scripts
+# and a binary ("Defining scripts and working with a binary doesn't
+# mix well"), so the binary takes the command name itself.
 [[bin]]
-name = "ollada-rs"
+name = "ollada"
 path = "src/main.rs"
 
 [dependencies]

@@ -9,7 +9,7 @@
 //! never imports einops, 4b's does). A pin mismatch or a missing package in
 //! an existing env is a refusal, not a silent rebuild: rebuilding
 //! re-downloads gigabytes, so it happens only on an explicit
-//! `ollada-rs workers rebuild <model>`.
+//! `ollada workers rebuild <model>`.
 //!
 //! Layout: `~/.ollada/workers/<family>/` (`OLLADA_WORKERS_DIR` overrides,
 //! same pattern as `OLLADA_MEASUREMENTS_DIR`).

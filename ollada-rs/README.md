@@ -113,7 +113,12 @@ working directory, else `./catalog`.
 - **`show`'s `measured here` line.** Python crashes with KeyError if a
   record lacks `observations`; this crate prints 1. Real records always
   carry it.
-- **The binary is `ollada-rs`.** `--version` prints that name.
+- **The binary is `ollada`.** It IS the `ollada` command when installed
+  from the wheel (maturin refuses a wheel with both console scripts
+  and a binary, so the binary takes the command name). `--version`
+  prints `ollada 0.3.7`, matching Python. `pull` shells out to
+  `python -m ollada.cli pull` — downloading weights is the Python
+  `huggingface-hub` path.
 - **Float formatting.** Rust's `{:?}` matches Python's repr for the
   magnitudes ollada prints (`16.0`, `6.59`, `0.9`); very large/small
   magnitudes could differ (`1e22` vs `1e+22`). Ollada never prints those.
@@ -189,11 +194,11 @@ cargo clippy --target x86_64-pc-windows-gnu --tests -- -D warnings
 export PATH="$HOME/.cargo/bin:$PATH"
 cargo build
 for cmd in "list" "recommend" "show diffcoder:8b4bit" "show sdar:1.7b" "ps" "rm diffcoder:8b4bit"; do
-  diff <(python -m ollada.cli $cmd) <(./target/debug/ollada-rs $cmd) && echo "OK: $cmd"
+  diff <(python -m ollada.cli $cmd) <(./target/debug/ollada $cmd) && echo "OK: $cmd"
 done
 for cmd in "workers" "workers list" "workers rebuild nope:1b"; do
   diff <(OLLADA_WORKERS_DIR=/tmp/empty-workers python -m ollada.cli $cmd 2>&1; echo "exit=$?") \
-       <(OLLADA_WORKERS_DIR=/tmp/empty-workers ./target/debug/ollada-rs $cmd 2>&1; echo "exit=$?") && echo "OK: $cmd"
+       <(OLLADA_WORKERS_DIR=/tmp/empty-workers ./target/debug/ollada $cmd 2>&1; echo "exit=$?") && echo "OK: $cmd"
 done
 ```
 (Run from the repo root with the Python venv's `ollada` on PATH. A full

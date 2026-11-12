@@ -369,7 +369,7 @@ function Api() {
   return (
     <section id="api">
       <h2>Local API</h2>
-      <p className="sub">Start the server, then point any tool that speaks HTTP at it. The chat endpoint is Ollama-shaped; there is also <code>POST /api/generate</code> for a single prompt and OpenAI-shaped <code>POST /v1/chat/completions</code>.</p>
+      <p className="sub">Start the server, then point any tool that speaks HTTP at it. The chat endpoint is Ollama-shaped; there is also <code>POST /api/generate</code> for a single prompt, OpenAI-shaped <code>POST /v1/chat/completions</code>, and prompt-only <code>POST /v1/completions</code> for editors.</p>
       <pre className="code">{SERVE}</pre>
       <div className="cmdbox">
         <Tabs tabs={(["curl", "ps", "js", "py"] as const).map((x) => ({ id: x, label: labels[x] }))} value={tab} onChange={(id) => setTab(id as "curl" | "ps" | "js" | "py")} label="Code example language" />
@@ -455,7 +455,7 @@ function GetStarted() {
           <CmdBlock text={venv} />
           <p><strong>Then run these one at a time, in order:</strong></p>
           <Flow items={cmdItems(CMDS.cpu)} numbered={false} />
-          <p className="fine">Check first: <code>pip show ollada</code> should say 0.3.5, and <code>ollada list</code> should show six models including sdar:1.7b. If it says 0.1.0, your Python is too new — go back to step 1 with 3.12. At the <code>&gt;&gt;&gt;</code> prompt, ask: What is the capital of France? Answer with exactly one word. Expect Paris. Ctrl-C quits. NVIDIA GPU? Same steps with <code>ollada[gpu]</code> instead.</p>
+          <p className="fine">Check first: <code>pip show ollada</code> should say 0.3.7, and <code>ollada list</code> should show six models including sdar:1.7b. If it says 0.1.0, your Python is too new — go back to step 1 with 3.12. At the <code>&gt;&gt;&gt;</code> prompt, ask: What is the capital of France? Answer with exactly one word. Expect Paris. Ctrl-C quits. NVIDIA GPU? Same steps with <code>ollada[gpu]</code> instead.</p>
         </li>
       </ol>
       <details>
@@ -576,7 +576,7 @@ export default function App() {
         </section></Band>
       </main>
       <Band tone="well" strip={false}><footer>
-        <p>Version 0.3.5 — six models verified on named hardware. Named the way Ollama was: Ollama ← LLaMA, Ollada ← LLaDA.</p>
+        <p>Version 0.3.7 — six models verified on named hardware. 0.3.7 ships the Rust front-end: pip install now bundles a single binary, with the same Python workers underneath. Named the way Ollama was: Ollama ← LLaMA, Ollada ← LLaDA.</p>
         <p><a href="https://github.com/OpenSourceRulesz/ollada">Source</a> · <a href="https://github.com/OpenSourceRulesz/ollada/blob/main/docs/FINDINGS.md">Findings</a> · <a href="https://github.com/OpenSourceRulesz/ollada/blob/main/docs/LIBRARY.md">Library</a> · <a href="https://pypi.org/project/ollada/">PyPI</a></p>
       </footer></Band>
     </div>

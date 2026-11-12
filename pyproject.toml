@@ -1,10 +1,18 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[tool.maturin]
+# The Rust front-end lives in its own crate directory; maturin builds
+# its [[bin]] (named `ollada`) and installs it as the `ollada`
+# command. `python -m ollada.cli` still works as the Python fallback
+# (and delegates to the binary when it is present).
+manifest-path = "ollada-rs/Cargo.toml"
+module-name = "ollada"
 
 [project]
 name = "ollada"
-version = "0.3.6"
+version = "0.3.7"
 description = "The shelf for open-source diffusion language models — pull, run, and serve dLLMs locally, Ollama-style."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -35,8 +43,7 @@ Homepage = "https://github.com/OpenSourceRulesz/ollada"
 Documentation = "https://opensourcerulesz.github.io/ollada"
 Repository = "https://github.com/OpenSourceRulesz/ollada"
 
-[project.scripts]
-ollada = "ollada.cli:main"
-
-[tool.hatch.build.targets.wheel]
-packages = ["ollada"]
+# No [project.scripts]: maturin refuses a wheel that defines both
+# console scripts and a binary, so the Rust binary (named `ollada`)
+# IS the `ollada` command. The Python implementation is still the
+# fallback for source checkouts via `python -m ollada.cli`.

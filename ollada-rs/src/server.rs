@@ -76,8 +76,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// `ollada/__init__.py` `__version__` (which matches
 /// `pyproject.toml` `version`); the `version_matches_python_package`
 /// test reads that file and fails if they drift. This is the
-/// *ollada* version, not the Rust crate's own version (0.1.0).
-pub const OLLADA_VERSION: &str = "0.3.6";
+/// *ollada* version, matching the Rust crate's version.
+pub const OLLADA_VERSION: &str = "0.3.7";
 
 /// Default bind, matching Python's `serve()` / CLI defaults.
 pub const DEFAULT_HOST: &str = "127.0.0.1";
@@ -1330,11 +1330,11 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         assert_eq!(
             body,
-            "{\"status\":\"ok\",\"version\":\"0.3.6\",\"loaded\":null,\"family\":null}"
+            "{\"status\":\"ok\",\"version\":\"0.3.7\",\"loaded\":null,\"family\":null}"
         );
         let (status, body) = request(app.clone(), Method::GET, "/api/version", "").await;
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(body, "{\"version\":\"0.3.6\"}");
+        assert_eq!(body, "{\"version\":\"0.3.7\"}");
         let (status, body) = request(app.clone(), Method::GET, "/api/ps", "").await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body, "{\"loaded\":null,\"family\":null,\"models\":[]}");

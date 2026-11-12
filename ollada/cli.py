@@ -11,9 +11,11 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
+import subprocess
 import sys
 import threading
 import time
+from pathlib import Path
 
 from ollada import __version__, fit, measurements
 from ollada.recipes import RecipeError, get_recipe, load_catalog
@@ -553,7 +555,61 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+# Commands the bundled Rust front-end implements. `pull` is Python-only:
+# the Rust crate has no download path, so it always stays on Python.
+_RUST_COMMANDS = frozenset({"list", "show", "run", "recommend", "serve", "ps", "rm", "workers"})
+
+
+def _bundled_rust_binary() -> Path | None:
+    """Path of the bundled Rust `ollada` binary in this install, or None.
+
+    maturin installs the crate's [[bin]] (named `ollada`) next to the
+    interpreter; a source checkout (or an install built without cargo)
+    has no binary, and the Python implementation runs instead.
+    """
+    exe_name = "ollada.exe" if os.name == "nt" else "ollada"
+    candidates = [Path(sys.executable).parent / exe_name]
+    on_path = shutil.which("ollada")
+    if on_path:
+        candidates.append(Path(on_path))
+    for candidate in candidates:
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return candidate
+    return None
+
+
+def _delegate_to_rust(argv: list[str]) -> int | None:
+    """Run the bundled Rust front-end for commands it implements.
+
+    Returns the exit code, or None when Python should handle the call:
+    no bundled binary, a Python-only command (`pull`), a help request
+    (whose text is Python's), or OLLADA_NO_RUST=1.
+    """
+    if not argv or argv[0] not in _RUST_COMMANDS:
+        return None
+    if os.environ.get("OLLADA_NO_RUST"):
+        return None
+    if any(arg in ("-h", "--help") for arg in argv):
+        return None
+    binary = _bundled_rust_binary()
+    if binary is None:
+        return None
+    try:
+        proc = subprocess.run([str(binary), *argv])
+    except OSError:
+        return None
+    return proc.returncode if proc.returncode >= 0 else 128 - proc.returncode
+
+
 def main(argv=None) -> int:
+    if argv is None:
+        # Console-script entry point: prefer the bundled Rust binary
+        # for the commands it implements. An explicit argv (the test
+        # suite, and embedders) always runs the Python implementation,
+        # so tests keep exercising Python code and capsys still works.
+        delegated = _delegate_to_rust(list(sys.argv[1:]))
+        if delegated is not None:
+            return delegated
     parser = build_parser()
     args = parser.parse_args(argv)
     if not getattr(args, "fn", None):

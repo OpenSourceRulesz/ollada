@@ -2,5 +2,6 @@ __pycache__/
 *.pyc
 dist/
 *.egg-info/
+ollada-rs/target/
 
 # site/ is the homepage source (React); see site/README.md

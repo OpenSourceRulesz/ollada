@@ -8,13 +8,18 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Check tag matches package version
+        shell: bash
         run: |
           PKG_VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
@@ -24,23 +29,51 @@ jobs:
           else
             echo "package=$PKG_VERSION (manual dispatch from $GITHUB_REF_NAME, tag check skipped)"
           fi
-      - name: Build wheel and sdist
-        run: |
-          python -m pip install --upgrade build
-          python -m build
+      # maturin builds the Rust binary into the wheel (see pyproject.toml
+      # [tool.maturin]: manifest-path ollada-rs/Cargo.toml). The wheel
+      # carries the `ollada` binary; the Python CLI is the fallback for
+      # source checkouts. One wheel per OS so `pip install ollada`
+      # works on Linux, macOS and Windows without a Rust toolchain.
+      - name: Build wheels with maturin
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release --out dist --find-interpreter
+          rust-toolchain: stable
       - uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: dist-${{ matrix.os }}
+          path: dist/
+
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Note: installing from the sdist now requires Rust + maturin on
+      # the user's machine (build-system requires maturin>=1.0,<2.0).
+      # The wheels above are the normal install path.
+      - name: Build sdist with maturin
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-sdist
           path: dist/
 
   publish:
-    needs: build
+    needs: [build, sdist]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: dist
+          pattern: dist-*
           path: dist/
+          merge-multiple: true
       - uses: pypa/gh-action-pypi-publish@release/v1
