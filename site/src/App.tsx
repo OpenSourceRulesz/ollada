@@ -98,8 +98,8 @@ function Headline() {
 
 /* ---------- install ---------- */
 const CMDS = {
-  cpu: ['pip install "ollada[cpu]"', "ollada pull sdar:1.7b", "ollada run sdar:1.7b"],
-  gpu: ['pip install "ollada[gpu]"', "ollada pull sdar:4b", "ollada run sdar:4b"],
+  cpu: ["pip install ollada", "ollada pull sdar:1.7b", "ollada run sdar:1.7b"],
+  gpu: ["pip install ollada", "ollada pull sdar:4b", "ollada run sdar:4b"],
 };
 type FlowItem = { label: string; cmd?: string; body?: ReactNode };
 const CMD_LABELS = ["Install Ollada", "Download a model (one time)", "Start chatting"];
@@ -150,7 +150,7 @@ function Install() {
   cmds[0] = { ...cmds[0], body: "Open a terminal, then run each command in order." };
   const items: FlowItem[] = [
     {
-      label: "Get Python 3.12 to 3.14",
+      label: "Get Python 3.10 or newer",
       body: <>Already have it? Skip to step 2. If not, the <a href="#install">step-by-step setup</a> gives you the right download for your system.</>,
     },
     ...cmds,
@@ -326,8 +326,7 @@ function NavMenu() {
 }
 
 /* ---------- use it from code ---------- */
-const SERVE = `pip install "ollada[server]"
-ollada serve`;
+const SERVE = `ollada serve`;
 const CURL = `curl http://localhost:11435/api/chat \\
   -H "Content-Type: application/json" \\
   -d '{"model":"sdar:1.7b","messages":[{"role":"user","content":"What is the capital of France? Answer with exactly one word."}]}'`;
@@ -433,14 +432,15 @@ function GetStarted() {
       <ol className="steps">
         <li>
           <h3>Install Python</h3>
-          <p>Python 3.12 to 3.14 supported, 3.12 recommended. Avoid 3.15 for now: torch does not have wheels for it yet, and pip can silently install an old ollada instead of failing.{os === "mac" && " The Python that ships with a Mac is 3.9, which is too old."}</p>
+          <p>Python 3.10 or newer — any version pip supports. It is only the installer: <code>pip install ollada</code> bundles the Rust binary, which runs the CLI, the server, and the worker setup. No extras to pick.{os === "mac" && " The Python that ships with a Mac is 3.9, which is too old."}</p>
           {os === "linux" ? (
-            <p>Most Linux distributions include Python. Check with <code>python3 --version</code>; if it’s older than 3.12, install a newer one with your package manager, or get it from <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a>.</p>
+            <p>Most Linux distributions include Python. Check with <code>python3 --version</code>; if it’s older than 3.10, install a newer one with your package manager, or get it from <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a>.</p>
           ) : (
             <p><a className="pbtn" href={os === "win" ? "https://www.python.org/downloads/windows/" : "https://www.python.org/downloads/macos/"} target="_blank" rel="noopener">Download Python for {os === "win" ? "Windows" : "Mac"}</a></p>
           )}
           {os === "win" && <p className="fine">During install, tick ‘Add python.exe to PATH’.</p>}
-          {os === "mac" && <p className="fine">After installing, also run the Install Certificates step for the version you installed — for example, for Python 3.12: <code>open "/Applications/Python 3.12/Install Certificates.command"</code>. Without it, the SDAR load fails with an SSL certificate error.</p>}
+          {os === "mac" && <p className="fine">After installing, also run the Install Certificates step for the version you installed — for example: <code>open "/Applications/Python 3.12/Install Certificates.command"</code>. Without it, the SDAR load fails with an SSL certificate error.</p>}
+          <p className="fine">One caveat: the first model run builds a worker environment that installs torch, and torch only ships wheels for the Pythons it supports — on a brand-new Python release that build can fail. If it does, use the previous Python release.</p>
         </li>
         <li>
           <h3>Open a terminal</h3>
@@ -450,12 +450,12 @@ function GetStarted() {
         </li>
         <li>
           <h3>Run the commands</h3>
-          <p>First, make a virtual environment. Modern Python refuses to install packages globally:</p>
+          <p>First, make a virtual environment. Some systems refuse to install packages outside one:</p>
           <p><strong>{venvLabel}:</strong></p>
           <CmdBlock text={venv} />
           <p><strong>Then run these one at a time, in order:</strong></p>
           <Flow items={cmdItems(CMDS.cpu)} numbered={false} />
-          <p className="fine">Check first: <code>pip show ollada</code> should say 0.3.7, and <code>ollada list</code> should show six models including sdar:1.7b. If it says 0.1.0, your Python is too new — go back to step 1 with 3.12. At the <code>&gt;&gt;&gt;</code> prompt, ask: What is the capital of France? Answer with exactly one word. Expect Paris. Ctrl-C quits. NVIDIA GPU? Same steps with <code>ollada[gpu]</code> instead.</p>
+          <p className="fine">Check first: <code>pip show ollada</code> should say 0.3.7, and <code>ollada list</code> should show six models including sdar:1.7b. At the <code>&gt;&gt;&gt;</code> prompt, ask: What is the capital of France? Answer with exactly one word. Expect Paris. Ctrl-C quits. NVIDIA GPU? Same steps — no extra needed; the first run picks CPU or CUDA torch for you.</p>
         </li>
       </ol>
       <details>
@@ -466,7 +466,7 @@ function GetStarted() {
           <dt>PowerShell execution policy</dt>
           <dd>If PowerShell refuses to run the activate script, run <code>Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass</code> first, then activate again.</dd>
           <dt>NVIDIA GPU</dt>
-          <dd>Same steps with <code>ollada[gpu]</code> instead of <code>ollada[cpu]</code>. DiffCoder is a tight fit on a 16 GB card — close other GPU apps first.</dd>
+          <dd>No extra install — plain <code>pip install ollada</code>. The worker env pulls CUDA torch on an NVIDIA machine and CPU torch otherwise. DiffCoder is a tight fit on a 16 GB card — close other GPU apps first.</dd>
           <dt>What to expect</dt>
           <dd>The first run is slow twice: the model download (about 4 GB for sdar:1.7b) and a one-time worker-environment build (torch plus transformers, a few hundred MB). Later runs skip both. On CPU, short answers take seconds, long ones up to a minute.</dd>
           <dt>If it fails</dt>
