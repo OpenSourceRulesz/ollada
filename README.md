@@ -32,7 +32,7 @@ Models run in per-family worker environments, built on first load of a family (o
 
 ## Status
 
-**Version 0.3.0 shipped 2026-10-26.** The runtime core is built: recipe catalog, family adapters (Dream / SDAR / DiffCoder / Nemotron), a one-model-at-a-time manager with per-family isolated worker environments, Ollama-shaped + OpenAI-shaped APIs, and the `list / show / pull / run / serve / ps / workers` CLI.
+**Version 0.3.7 shipped 2026-11-12.** The runtime core is built: recipe catalog, family adapters (Dream / SDAR / DiffCoder / Nemotron), a one-model-at-a-time manager with per-family isolated worker environments, Ollama-shaped + OpenAI-shaped APIs, and the `list / show / pull / run / serve / ps / workers` CLI. Since 0.3.0: 0.3.5 added the verified `diffcoder:8b4bit` recipe; 0.3.6 added the first outside contribution (GB10 detection fix), the Colab worker-venv fix, and `POST /v1/completions`; 0.3.7 rewrote the front-end in Rust — `pip install ollada` now bundles a single binary (Linux / macOS arm64 / Windows wheels) that runs the CLI, the server, and the worker setup, proven on a real Windows laptop (Dell, no GPU: `run sdar:1.7b` answered Paris in 8.8s from a cold start, serve healthy, worker rebuild through Rust).
 
 **Verified shelf (real-load runs, our numbers — see [PLAN.md](PLAN.md) §7):**
 - ✅ `diffcoder:8b` — Tesla T4 (Colab), 2026-10-21: peak VRAM 15.15GB (the T4 is this recipe's floor — ~0.5GB headroom), ~4.1 canvas tok/s at the recipe defaults (steps=256), code quality strong across the coding prompt set. Also verified on the desktop RTX 5060 Ti, 2026-10-25: peak 13.65 GB (see FINDINGS §8). Verified with Ollada's mask-dtype repair active; see the recipe notes.
