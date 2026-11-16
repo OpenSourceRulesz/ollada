@@ -182,6 +182,29 @@ def _pip_packages(recipe: Recipe) -> list[str]:
     return out
 
 
+def _recipe_packages(recipe: Recipe) -> list[str]:
+    """What THIS recipe needs in the worker env: base pkgs + its own extras.
+
+    The fresh-build install set is the family union (_pip_packages), but
+    the existing-env check must be per-recipe: a variant must not be
+    refused for a package only another variant uses. nemotron:8b6bit runs
+    on HQQ and never imports bitsandbytes, so an env with hqq but no
+    bitsandbytes is a valid env for it (2026-11-16 Colab: the union check
+    refused the 6-bit run for a quantizer it does not use).
+    """
+    spec = (recipe.env or {}).get("transformers", "")
+    pkgs = ["pyyaml", "torch", f"transformers{spec}", "accelerate"]
+    pkgs.extend((recipe.env or {}).get("extras", []) or [])
+    seen: set[str] = set()
+    out: list[str] = []
+    for pkg in pkgs:
+        key = pkg.split("[")[0].split("=")[0].split(">")[0].split("<")[0].strip()
+        if key not in seen:
+            seen.add(key)
+            out.append(pkg)
+    return out
+
+
 def _run_checked(argv: list[str], what: str, _run=subprocess.run) -> None:
     try:
         proc = _run(argv, capture_output=True, text=True)
@@ -288,13 +311,14 @@ def ensure_env(recipe: Recipe, _run=subprocess.run) -> Path:
                     f"but {recipe.name} pins transformers{spec}. Rebuild it: "
                     f"ollada workers rebuild {recipe.name}")
         # An env built before the union rule (or by hand) can pass the
-        # pin check while missing a package another family model needs
-        # — the Dell sdar env had transformers but no einops. Refuse
-        # with the same rebuild pointer instead of a bare ImportError.
+        # pin check while missing a package this recipe needs — the Dell
+        # sdar env had transformers but no einops. Refuse with the same
+        # rebuild pointer instead of a bare ImportError. Per-recipe,
+        # not the family union: see _recipe_packages.
         dists = installed_distributions(python)
         if dists is not None:
             needed = {_norm_dist_name(p.split("[")[0].split("=")[0].split(">")[0].split("<")[0])
-                      for p in _pip_packages(recipe)}
+                      for p in _recipe_packages(recipe)}
             missing = sorted(n for n in needed if n not in dists)
             if missing:
                 raise WorkerEnvError(

@@ -116,6 +116,31 @@ def test_ensure_env_missing_package_refuses_with_rebuild_pointer(monkeypatch, tm
         ensure_env(get_recipe("sdar:4b"))
 
 
+def test_ensure_env_per_recipe_check_allows_hqq_without_bitsandbytes(monkeypatch, tmp_path):
+    # 2026-11-16 Colab: the 6-bit run was refused because the shared
+    # nemotron env had hqq but no bitsandbytes — a package only the
+    # 4-bit variant uses. The check is per-recipe: 8b6bit needs hqq,
+    # not bitsandbytes, so this env is valid for it.
+    monkeypatch.setenv("OLLADA_WORKERS_DIR", str(tmp_path))
+    family_dir = venv_path("nemotron")
+    if sys.platform == "win32":
+        (family_dir / "Scripts").mkdir(parents=True)
+        (family_dir / "Scripts" / "python.exe").touch()
+    else:
+        (family_dir / "bin").mkdir(parents=True)
+        (family_dir / "bin" / "python").touch()
+    monkeypatch.setattr(
+        "ollada.workers.installed_transformers", lambda python: "5.20.2")
+    monkeypatch.setattr(
+        "ollada.workers.installed_distributions",
+        lambda python: {"pyyaml", "torch", "transformers", "accelerate", "hqq"})
+    assert ensure_env(get_recipe("nemotron:8b6bit")) == venv_python("nemotron")
+    # ...while the 4-bit variant in the same env still refuses, because
+    # bitsandbytes is in ITS extras.
+    with pytest.raises(WorkerEnvError, match="ollada workers rebuild nemotron:8b4bit"):
+        ensure_env(get_recipe("nemotron:8b4bit"))
+
+
 def test_ensure_env_refuses_pin_mismatch(monkeypatch, tmp_path):
     monkeypatch.setenv("OLLADA_WORKERS_DIR", str(tmp_path))
     family_dir = venv_path("dream")
