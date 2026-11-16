@@ -2,7 +2,7 @@ import pytest
 
 from ollada.recipes import RecipeError, get_recipe, load_catalog, validate_recipe
 
-EXPECTED_SHELF = {"dream:7b", "sdar:4b", "diffcoder:8b", "sdar:1.7b", "nemotron:3b", "diffcoder:8b4bit"}
+EXPECTED_SHELF = {"dream:7b", "sdar:4b", "diffcoder:8b", "sdar:1.7b", "nemotron:3b", "diffcoder:8b4bit", "nemotron:8b4bit"}
 
 
 def test_shelf_verified_models_present_and_extras_unverified():
@@ -11,7 +11,13 @@ def test_shelf_verified_models_present_and_extras_unverified():
     # the shelf's second CPU-verified entry (laptop-CPU-verified, see
     # its recipe), plus diffcoder:8b4bit, added 2026-11-06 as the
     # shelf's sixth entry (A100-verified through ollada run, see its
-    # recipe; desktop 5060 Ti verification still pending). The verified shelf must all be present; anything
+    # recipe; desktop 5060 Ti verification still pending), plus
+    # nemotron:8b4bit, added 2026-11-16 as the shelf's seventh entry
+    # (A100-verified through ollada run, see its recipe; desktop 5060 Ti
+    # verification still pending). nemotron:8b6bit is deliberately NOT on
+    # the shelf: it ran 3/3 on a Colab A100-40GB but peaked at 16.41 GB,
+    # so it fits no 16 GB card — the 4-bit variant is the runnable one.
+    # The verified shelf must all be present; anything
     # else in the catalog must be UNVERIFIED — it joins the shelf only
     # by earning a verification block, never by landing in the catalog.
     recipes = {r.name: r for r in load_catalog()}
@@ -61,6 +67,16 @@ def test_verification_state_matches_the_record():
     assert nemotron.is_verified is True
     assert "CPU" in nemotron.verified["hardware"]
     assert "vram_gb" not in nemotron.verified
+    # nemotron:8b4bit earned verification on a real A100 run, 2026-11-16
+    # (ollada run through the nemotron worker, fixed set 3/3, peak 6.18 GB).
+    nemotron84 = by_name["nemotron:8b4bit"]
+    assert nemotron84.is_verified is True
+    assert "A100" in nemotron84.verified["hardware"]
+    assert nemotron84.verified["vram_gb"] == 6.18
+    # nemotron:8b6bit must stay UNVERIFIED on the shelf: it ran 3/3 on a
+    # Colab A100-40GB (2026-11-16) but peaked at 16.41 GB, so it fits no
+    # 16 GB card — deliberately not shelved, see its recipe comment.
+    assert by_name["nemotron:8b6bit"].is_verified is False
 
 
 def test_family_env_pins_match_their_custom_code():

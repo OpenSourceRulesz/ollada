@@ -1,9 +1,10 @@
 # ollada Recipe (schema v1) — nemotron:8b6bit
 # Same model as nemotron:8b4bit, loaded in 6-bit (HQQ, weight-only) instead
 # of 4-bit (BitsAndBytes NF4). BitsAndBytes has no 6-bit; HQQ is the
-# quantizer. The point is quality, not fit: the 4-bit run peaked at
-# 6.18 GB, and 6-bit should peak around 6-7 GB, so it fits the same cards.
-# A 6-bit variant exists for people who want better quality than 4-bit.
+# quantizer. The point is quality, not fit — and the fit went the other
+# way: measured peak 16.41 GB, so this variant needs a 24 GB-class card
+# while the 4-bit variant fits 8 GB / 16 GB cards. A 6-bit variant exists
+# for people who want better quality than 4-bit and have the VRAM for it.
 # The 4-bit entry stays untouched.
 # Name note: the recipe name regex allows only [a-z0-9.] after the colon,
 # so this is "8b6bit", not "8b-int6".
@@ -12,32 +13,35 @@ family: nemotron
 source: nvidia/Nemotron-Labs-Diffusion-8B
 license: NVIDIA Nemotron Open Model License  # same as nemotron:8b4bit
 task: chat
-description: Nemotron-Labs Diffusion 8B in 6-bit (HQQ weight-only) — same tri-mode family as nemotron:3b, the quality step up from the 4-bit variant; fits the same 16 GB cards.
+description: Nemotron-Labs Diffusion 8B in 6-bit (HQQ weight-only) — same tri-mode family as nemotron:3b, the quality step up from the 4-bit variant; needs a 24 GB-class card (measured peak 16.41 GB — on-the-fly HQQ loads the bf16 weights first, so it does NOT fit the 16 GB cards the 4-bit variant fits).
 size_gb_bf16: 16.0      # same estimate as nemotron:8b4bit (8B params x 2 bytes bf16)
 quant_default: int6     # HqqConfig(nbits=6, group_size=64, axis=1); the adapter's quantization_config handles int6
 dtype: bfloat16         # same as nemotron:3b
 env:
-  transformers: "==4.57.6"  # NOT the family's 5.20.2 pin: on-the-fly HQQ quantization is broken in transformers 5.x (see below), and 4.57.6 is the newest 4.x this stack has verified. Whether NVIDIA's vendored modeling_ministral.py runs under 4.x is what the Colab test answers — it may need 5.x APIs.
+  transformers: "==4.57.6"  # NOT the family's 5.20.2 pin: on-the-fly HQQ quantization is broken in transformers 5.x (see below), and 4.57.6 is the newest 4.x this stack has verified. The 2026-11-16 Colab test proved NVIDIA's vendored modeling_ministral.py runs fine under 4.57.6.
   extras: [torch, accelerate, hqq]
 generate:
   mode: diffusion          # same as nemotron:3b; ollada runs diffusion mode only
   max_new_tokens: 256      # same as nemotron:3b
   block_length: 32         # same as nemotron:3b (adapter default; also the config's block_size)
   threshold: 0.9           # same as nemotron:3b (adapter default)
-# NOT VERIFIED — no verified: block yet. Verification (PLAN.md §7) needs a
-# real load through ollada's own code on named hardware: fixed set 3/3
-# plus a measured peak VRAM. First load on a 16 GB card will need --force
-# (the fit check uses the 16.0 GB bf16 estimate until a local measurement
-# record exists), exactly like nemotron:8b4bit.
+# NOT VERIFIED — and deliberately not shelved. A real-load run happened
+# on 2026-11-16 (Colab A100-SXM4-40GB, fixed set 3/3: train 90 km/h in
+# 56.3s, capital Paris in 33.7s, fib correct in 37.3s) but the measured
+# peak was 16.41 GB — on-the-fly HQQ loads the full bf16 weights first,
+# so it needs ~17.4 GB with headroom and does NOT fit a 16 GB card. It
+# is also slower than the 4-bit run (32.8s / 21.4s / 22.1s), HQQ's
+# plain-PyTorch backend having no optimized kernels. Decision 2026-11-16:
+# the 4-bit variant (peak 6.18 GB) is the one people can actually run, so
+# only it joins the shelf; this 6-bit recipe stays listable but
+# unverified. If a future quantizer loads 6-bit without the bf16-first
+# peak, re-measure before shelving it.
 # HQQ history: this recipe FIRST pinned transformers ==5.20.2 (the
 # family's pin). The 2026-11-16 Colab test proved that cannot work:
 # 5.20.2 accepts HqqConfig(nbits=6) but its HqqHfQuantizer does NOT
 # implement get_quantize_ops — the 5.x loading rewrite calls it and the
 # base class raises NotImplementedError("QuantizationMethod.HQQ is not
 # available yet and will be supported soon."). On-the-fly HQQ
-# quantization is dead in transformers 5.x. The recipe now pins 4.57.6,
-# where HQQ on-the-fly worked; the Colab test answers whether the
-# vendored modeling code runs under 4.x. Fallback if 4.x fails:
-# pre-quantize a 6-bit HQQ checkpoint offline and load that (5.x can
-# LOAD a pre-quantized HQQ model, it just cannot quantize one).
+# quantization is dead in transformers 5.x. The recipe pins 4.57.6,
+# where HQQ on-the-fly works and the vendored modeling code runs fine.
 verified:

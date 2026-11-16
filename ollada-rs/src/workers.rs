@@ -1260,7 +1260,7 @@ mod tests {
         let python = touch_venv_python(&dir, "nemotron");
         let runner = FakeRunner::new(|argv| {
             if argv.iter().any(|a| a.contains("m.version('transformers')")) {
-                return Ok(RunOutput::new(0, "5.20.2", ""));
+                return Ok(RunOutput::new(0, "4.57.6", ""));
             }
             if argv.iter().any(|a| a.contains("m.distributions()")) {
                 return Ok(RunOutput::new(
@@ -1277,12 +1277,27 @@ mod tests {
             python
         );
         // ...while the 4-bit variant in the same env still refuses,
-        // because bitsandbytes is in ITS extras.
+        // because bitsandbytes is in ITS extras. (Its pin is 5.20.2, so
+        // the second runner reports that version; the refusal is the
+        // missing package, not the pin.)
+        let runner2 = FakeRunner::new(|argv| {
+            if argv.iter().any(|a| a.contains("m.version('transformers')")) {
+                return Ok(RunOutput::new(0, "5.20.2", ""));
+            }
+            if argv.iter().any(|a| a.contains("m.distributions()")) {
+                return Ok(RunOutput::new(
+                    0,
+                    "pyyaml\ntorch\ntransformers\naccelerate\nhqq\n",
+                    "",
+                ));
+            }
+            Ok(RunOutput::new(0, "", ""))
+        });
         let err = ensure_env(
             &recipe("nemotron:8b4bit", &cat),
             &cat,
             &dir,
-            &runner,
+            &runner2,
             Some(gpu_hw()),
         )
         .unwrap_err();
