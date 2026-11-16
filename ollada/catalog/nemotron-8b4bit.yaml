@@ -1,0 +1,36 @@
+# ollada Recipe (schema v1) — nemotron:8b4bit
+# Same family as nemotron:3b (the shelf's 3B), loaded in 4-bit (BitsAndBytes
+# NF4, weight-only) instead of bf16. The bf16 8B would need ~17 GB peak and
+# does not fit a 16 GB card; the 4-bit variant should peak around 5-6 GB.
+# The 3B entry stays untouched.
+# Name note: the recipe name regex allows only [a-z0-9.] after the colon,
+# so this is "8b4bit", not "8b-int4".
+name: nemotron:8b4bit
+family: nemotron
+source: nvidia/Nemotron-Labs-Diffusion-8B
+license: NVIDIA Nemotron Open Model License  # confirmed from the repo's own model card (license_name: nvidia-nemotron-open-model-license)
+task: chat
+description: Nemotron-Labs Diffusion 8B in 4-bit (NF4 weight-only) — same tri-mode family as nemotron:3b, bigger (34 layers vs 26), fits a 16 GB card with headroom.
+size_gb_bf16: 16.0      # estimate only: 8B params x 2 bytes bf16; no weights-size measurement yet (HF API did not return file sizes)
+quant_default: int4     # BitsAndBytesConfig(load_in_4bit=True); the nemotron adapter already supports int4
+dtype: bfloat16         # same as nemotron:3b
+env:
+  transformers: "==5.20.2"  # same pin as nemotron:3b — NVIDIA's vendored modeling_ministral.py needs check_model_inputs, which 5.3.0 removed
+  extras: [torch, accelerate, bitsandbytes]
+generate:
+  mode: diffusion          # same as nemotron:3b; ollada runs diffusion mode only
+  max_new_tokens: 256      # same as nemotron:3b
+  block_length: 32         # same as nemotron:3b (adapter default; also the config's block_size)
+  threshold: 0.9           # same as nemotron:3b (adapter default)
+# NOT VERIFIED — no verified: block yet. Verification (PLAN.md §7) needs a
+# real load through ollada's own code on named hardware: fixed set 3/3
+# plus a measured peak VRAM. First load on a 16 GB card will need --force
+# (the fit check uses the 16.0 GB bf16 estimate until a local measurement
+# record exists), exactly like diffcoder:8b4bit on the T4.
+# Config checked 2026-11-15 against the live repo: same architecture as the
+# shelf 3B (NemotronLabsDiffusionModel, model_type nemotron_labs_diffusion,
+# same custom modeling files, block_size 32, mask_token_id 100), only bigger
+# (34 layers vs 26, hidden 4096 vs 3072, intermediate 14336 vs 9216).
+# There is no separate Nemotron-Labs-Diffusion-8B-Instruct repo — the model
+# lives at nvidia/Nemotron-Labs-Diffusion-8B, which ships a chat template.
+verified:
