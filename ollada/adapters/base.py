@@ -116,11 +116,21 @@ class BaseAdapter:
 
 
 def quantization_config(quant: str):
-    """Build a BitsAndBytesConfig for int8/int4, else None.
+    """Build a quantization config for int8/int4 (BitsAndBytes) or int6 (HQQ), else None.
 
     Never pass load_in_8bit as a raw from_pretrained kwarg — it leaks into
     some families' custom __init__ and crashes (npc-engine, 2026-10-20).
+
+    int6 uses HQQ, not BitsAndBytes (bnb has no 6-bit). transformers 5.20.2's
+    HqqConfig documents nbits (8, 4, 3, 2, 1) but does not validate it — it
+    passes nbits straight to HQQ's BaseQuantizeConfig, which accepts 6
+    (read from the 5.20.2 wheel, 2026-11-16). Whether 6-bit actually loads
+    and runs for a given family is proven only by a real-load test.
     """
+    if quant == "int6":
+        from transformers import HqqConfig
+
+        return HqqConfig(nbits=6, group_size=64, axis=1)
     if quant not in ("int8", "int4"):
         return None
     from transformers import BitsAndBytesConfig

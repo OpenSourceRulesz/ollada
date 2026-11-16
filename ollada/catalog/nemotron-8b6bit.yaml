@@ -1,0 +1,37 @@
+# ollada Recipe (schema v1) — nemotron:8b6bit
+# Same model as nemotron:8b4bit, loaded in 6-bit (HQQ, weight-only) instead
+# of 4-bit (BitsAndBytes NF4). BitsAndBytes has no 6-bit; HQQ is the
+# quantizer. The point is quality, not fit: the 4-bit run peaked at
+# 6.18 GB, and 6-bit should peak around 6-7 GB, so it fits the same cards.
+# A 6-bit variant exists for people who want better quality than 4-bit.
+# The 4-bit entry stays untouched.
+# Name note: the recipe name regex allows only [a-z0-9.] after the colon,
+# so this is "8b6bit", not "8b-int6".
+name: nemotron:8b6bit
+family: nemotron
+source: nvidia/Nemotron-Labs-Diffusion-8B
+license: NVIDIA Nemotron Open Model License  # same as nemotron:8b4bit
+task: chat
+description: Nemotron-Labs Diffusion 8B in 6-bit (HQQ weight-only) — same tri-mode family as nemotron:3b, the quality step up from the 4-bit variant; fits the same 16 GB cards.
+size_gb_bf16: 16.0      # same estimate as nemotron:8b4bit (8B params x 2 bytes bf16)
+quant_default: int6     # HqqConfig(nbits=6, group_size=64, axis=1); the adapter's quantization_config handles int6
+dtype: bfloat16         # same as nemotron:3b
+env:
+  transformers: "==5.20.2"  # same pin as nemotron:3b — NVIDIA's vendored modeling_ministral.py needs check_model_inputs, which 5.3.0 removed
+  extras: [torch, accelerate, hqq]
+generate:
+  mode: diffusion          # same as nemotron:3b; ollada runs diffusion mode only
+  max_new_tokens: 256      # same as nemotron:3b
+  block_length: 32         # same as nemotron:3b (adapter default; also the config's block_size)
+  threshold: 0.9           # same as nemotron:3b (adapter default)
+# NOT VERIFIED — no verified: block yet. Verification (PLAN.md §7) needs a
+# real load through ollada's own code on named hardware: fixed set 3/3
+# plus a measured peak VRAM. First load on a 16 GB card will need --force
+# (the fit check uses the 16.0 GB bf16 estimate until a local measurement
+# record exists), exactly like nemotron:8b4bit.
+# HQQ note: transformers 5.20.2's HqqConfig documents nbits (8, 4, 3, 2, 1)
+# but does not validate it — it passes nbits through to HQQ's
+# BaseQuantizeConfig, which accepts 6 (verified by reading the 5.20.2
+# wheel, 2026-11-16). The Colab test is the proof that 6-bit loads and
+# runs for this family.
+verified:
