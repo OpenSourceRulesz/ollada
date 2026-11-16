@@ -1342,7 +1342,7 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         let parsed: JsonValue = serde_json::from_str(&body).unwrap();
         assert_eq!(parsed["object"], "list");
-        assert_eq!(parsed["data"].as_array().unwrap().len(), 6);
+        assert_eq!(parsed["data"].as_array().unwrap().len(), 8);
         assert_eq!(parsed["data"][0]["id"], "diffcoder:8b");
         assert_eq!(parsed["data"][0]["created"], 1_792_540_800);
         assert_eq!(parsed["data"][0]["owned_by"], "ByteDance-Seed");
@@ -1352,8 +1352,8 @@ mod tests {
         let (status, body) = request(app, Method::GET, "/api/tags", "").await;
         assert_eq!(status, StatusCode::OK);
         let parsed: JsonValue = serde_json::from_str(&body).unwrap();
-        assert_eq!(parsed["models"].as_array().unwrap().len(), 6);
-        assert_eq!(parsed["models"][4]["name"], "sdar:1.7b");
+        assert_eq!(parsed["models"].as_array().unwrap().len(), 8);
+        assert_eq!(parsed["models"][6]["name"], "sdar:1.7b");
     }
 
     #[tokio::test]

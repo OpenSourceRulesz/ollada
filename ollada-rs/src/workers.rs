@@ -315,6 +315,35 @@ pub fn pip_packages(recipe: &Recipe, catalog: &[Recipe]) -> Vec<String> {
     out
 }
 
+/// What THIS recipe needs in the worker env: base pkgs + its own extras.
+/// Mirrors `ollada.workers._recipe_packages`.
+///
+/// The fresh-build install set is the family union (`pip_packages`), but
+/// the existing-env check must be per-recipe: a variant must not be
+/// refused for a package only another variant uses. nemotron:8b6bit runs
+/// on HQQ and never imports bitsandbytes, so an env with hqq but no
+/// bitsandbytes is a valid env for it (2026-11-16 Colab: the union check
+/// refused the 6-bit run for a quantizer it does not use).
+pub fn recipe_packages(recipe: &Recipe) -> Vec<String> {
+    let spec = env_transformers(recipe);
+    let mut pkgs = vec![
+        "pyyaml".to_string(),
+        "torch".to_string(),
+        format!("transformers{spec}"),
+        "accelerate".to_string(),
+    ];
+    pkgs.extend(env_extras(recipe));
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut out: Vec<String> = Vec::new();
+    for pkg in pkgs {
+        let key = pkg_key(&pkg);
+        if seen.insert(key) {
+            out.push(pkg);
+        }
+    }
+    out
+}
+
 fn norm_dist_name(name: &str) -> String {
     name.to_lowercase().replace('-', "_")
 }
@@ -637,11 +666,12 @@ pub fn ensure_env(
             }
         }
         // An env built before the union rule (or by hand) can pass the
-        // pin check while missing a package another family model needs
-        // — the Dell sdar env had transformers but no einops. Refuse
-        // with the same rebuild pointer instead of a bare ImportError.
+        // pin check while missing a package this recipe needs — the Dell
+        // sdar env had transformers but no einops. Refuse with the same
+        // rebuild pointer instead of a bare ImportError. Per-recipe,
+        // not the family union: see `recipe_packages`.
         if let Some(dists) = installed_distributions(&python, runner) {
-            let needed: HashSet<String> = pip_packages(recipe, catalog)
+            let needed: HashSet<String> = recipe_packages(recipe)
                 .iter()
                 .map(|p| norm_dist_name(&pkg_key(p)))
                 .collect();
@@ -1213,6 +1243,52 @@ mod tests {
         assert_eq!(
             err.0,
             "worker env for sdar is missing einops. Rebuild it: ollada workers rebuild sdar:4b"
+        );
+    }
+
+    #[test]
+    fn ensure_env_per_recipe_check_allows_hqq_without_bitsandbytes() {
+        // 2026-11-16 Colab: the 6-bit run was refused because the shared
+        // nemotron env had hqq but no bitsandbytes — a package only the
+        // 4-bit variant uses. The check is per-recipe: 8b6bit needs hqq,
+        // not bitsandbytes, so this env is valid for it. Mirrors the
+        // Python test of the same name. (The Python-only fix landed
+        // first; the Colab run still failed because `run` delegates to
+        // this Rust binary, which had its own copy of the union check.)
+        let cat = catalog();
+        let dir = tmp_dir("hqq-without-bnb");
+        let python = touch_venv_python(&dir, "nemotron");
+        let runner = FakeRunner::new(|argv| {
+            if argv.iter().any(|a| a.contains("m.version('transformers')")) {
+                return Ok(RunOutput::new(0, "5.20.2", ""));
+            }
+            if argv.iter().any(|a| a.contains("m.distributions()")) {
+                return Ok(RunOutput::new(
+                    0,
+                    "pyyaml\ntorch\ntransformers\naccelerate\nhqq\n",
+                    "",
+                ));
+            }
+            Ok(RunOutput::new(0, "", ""))
+        });
+        assert_eq!(
+            ensure_env(&recipe("nemotron:8b6bit", &cat), &cat, &dir, &runner, Some(gpu_hw()))
+                .unwrap(),
+            python
+        );
+        // ...while the 4-bit variant in the same env still refuses,
+        // because bitsandbytes is in ITS extras.
+        let err = ensure_env(
+            &recipe("nemotron:8b4bit", &cat),
+            &cat,
+            &dir,
+            &runner,
+            Some(gpu_hw()),
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.0,
+            "worker env for nemotron is missing bitsandbytes. Rebuild it: ollada workers rebuild nemotron:8b4bit"
         );
     }
 
