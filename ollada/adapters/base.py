@@ -124,8 +124,12 @@ def quantization_config(quant: str):
     int6 uses HQQ, not BitsAndBytes (bnb has no 6-bit). transformers 5.20.2's
     HqqConfig documents nbits (8, 4, 3, 2, 1) but does not validate it — it
     passes nbits straight to HQQ's BaseQuantizeConfig, which accepts 6
-    (read from the 5.20.2 wheel, 2026-11-16). Whether 6-bit actually loads
-    and runs for a given family is proven only by a real-load test.
+    (read from the 5.20.2 wheel, 2026-11-16) — but 5.x cannot USE it:
+    HqqHfQuantizer never implemented get_quantize_ops, so on-the-fly HQQ
+    raises NotImplementedError at load (Colab, 2026-11-16). The 6-bit
+    recipe therefore pins transformers 4.57.x, where HQQ on-the-fly
+    worked. Whether 6-bit actually loads and runs for a given family is
+    proven only by a real-load test.
     """
     if quant == "int6":
         from transformers import HqqConfig

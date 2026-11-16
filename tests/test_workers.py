@@ -130,7 +130,7 @@ def test_ensure_env_per_recipe_check_allows_hqq_without_bitsandbytes(monkeypatch
         (family_dir / "bin").mkdir(parents=True)
         (family_dir / "bin" / "python").touch()
     monkeypatch.setattr(
-        "ollada.workers.installed_transformers", lambda python: "5.20.2")
+        "ollada.workers.installed_transformers", lambda python: "4.57.6")
     monkeypatch.setattr(
         "ollada.workers.installed_distributions",
         lambda python: {"pyyaml", "torch", "transformers", "accelerate", "hqq"})

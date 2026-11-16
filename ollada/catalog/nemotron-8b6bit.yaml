@@ -17,7 +17,7 @@ size_gb_bf16: 16.0      # same estimate as nemotron:8b4bit (8B params x 2 bytes 
 quant_default: int6     # HqqConfig(nbits=6, group_size=64, axis=1); the adapter's quantization_config handles int6
 dtype: bfloat16         # same as nemotron:3b
 env:
-  transformers: "==5.20.2"  # same pin as nemotron:3b — NVIDIA's vendored modeling_ministral.py needs check_model_inputs, which 5.3.0 removed
+  transformers: "==4.57.6"  # NOT the family's 5.20.2 pin: on-the-fly HQQ quantization is broken in transformers 5.x (see below), and 4.57.6 is the newest 4.x this stack has verified. Whether NVIDIA's vendored modeling_ministral.py runs under 4.x is what the Colab test answers — it may need 5.x APIs.
   extras: [torch, accelerate, hqq]
 generate:
   mode: diffusion          # same as nemotron:3b; ollada runs diffusion mode only
@@ -29,9 +29,15 @@ generate:
 # plus a measured peak VRAM. First load on a 16 GB card will need --force
 # (the fit check uses the 16.0 GB bf16 estimate until a local measurement
 # record exists), exactly like nemotron:8b4bit.
-# HQQ note: transformers 5.20.2's HqqConfig documents nbits (8, 4, 3, 2, 1)
-# but does not validate it — it passes nbits through to HQQ's
-# BaseQuantizeConfig, which accepts 6 (verified by reading the 5.20.2
-# wheel, 2026-11-16). The Colab test is the proof that 6-bit loads and
-# runs for this family.
+# HQQ history: this recipe FIRST pinned transformers ==5.20.2 (the
+# family's pin). The 2026-11-16 Colab test proved that cannot work:
+# 5.20.2 accepts HqqConfig(nbits=6) but its HqqHfQuantizer does NOT
+# implement get_quantize_ops — the 5.x loading rewrite calls it and the
+# base class raises NotImplementedError("QuantizationMethod.HQQ is not
+# available yet and will be supported soon."). On-the-fly HQQ
+# quantization is dead in transformers 5.x. The recipe now pins 4.57.6,
+# where HQQ on-the-fly worked; the Colab test answers whether the
+# vendored modeling code runs under 4.x. Fallback if 4.x fails:
+# pre-quantize a 6-bit HQQ checkpoint offline and load that (5.x can
+# LOAD a pre-quantized HQQ model, it just cannot quantize one).
 verified:
