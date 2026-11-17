@@ -1,584 +1,498 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import "./site.css";
+import { useEffect, useRef, useState, type KeyboardEvent as RKeyboardEvent } from "react";
+import {
+  Tabs, Headline, IconCopy, CMDS, CMD_LABELS, CMD, PROMPT, WORDS, DIFF, wrongTok, fresh, type Sim,
+  SHELF, FAMILIES, status, type M, SERVE, CURL, PS, JS, PY, VENV, VENV_PS, detectOs,
+} from "./shared";
+import "./palette.css";
 
-/* ---------- segmented tabs: bordered pill group, filled active state,
-   roving tabindex + arrow-key / Home / End support (handoff C) ---------- */
-type TabDef = { id: string; label: string };
-function Tabs({ tabs, value, onChange, label }: { tabs: TabDef[]; value: string; onChange: (id: string) => void; label: string }) {
-  const key = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
-    let next: number | null = null;
-    if (e.key === "ArrowRight") next = (i + 1) % tabs.length;
-    if (e.key === "ArrowLeft") next = (i - 1 + tabs.length) % tabs.length;
-    if (e.key === "Home") next = 0;
-    if (e.key === "End") next = tabs.length - 1;
-    if (next === null) return;
-    e.preventDefault();
-    onChange(tabs[next].id);
-    e.currentTarget.parentElement?.querySelectorAll("button")[next]?.focus();
-  };
+const reduced = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+function Squares() {
+  return <span className="sq" aria-hidden="true"><i /><i /><i /><i /><i /><i /></span>;
+}
+function Progress({ lit }: { lit: number }) {
+  return <span className="sq prog" aria-hidden="true">{[0, 1, 2, 3, 4, 5].map((i) => <i key={i} className={i < lit ? "on" : ""} />)}</span>;
+}
+function Alert() {
+  return <svg className="must-i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5.5" /><path d="M12 16.5v.01" /></svg>;
+}
+function CopyIcon() {
+  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>;
+}
+function Cmd({ cmd }: { cmd: string }) {
   return (
-    <div className="tabs" role="tablist" aria-label={label}>
-      {tabs.map((t, i) => (
-        <button key={t.id} role="tab" aria-selected={value === t.id} tabIndex={value === t.id ? 0 : -1} onClick={() => onChange(t.id)} onKeyDown={(e) => key(e, i)}>
-          {t.label}
-        </button>
-      ))}
+    <div className="pill">
+      <code><span className="p" aria-hidden="true">$ </span>{cmd}</code>
+      <IconCopy text={cmd} />
+    </div>
+  );
+}
+function Code({ text, label }: { text: string; label: string }) {
+  const [done, setDone] = useState(false);
+  const copy = () => navigator.clipboard?.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1600); }, () => {});
+  return (
+    <div className="code">
+      <pre>{text}</pre>
+      <button className={`icopy${done ? " done" : ""}`} onClick={copy} aria-label={done ? "Copied" : label} title="Copy">
+        {done ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg> : <CopyIcon />}
+      </button>
     </div>
   );
 }
 
-const rnd = (n: number) => Math.floor(Math.random() * n);
-
-/* ---------- headline: letters resolve in random order ---------- */
-const TITLE = "Pull a diffusion model. Run it.";
-const ABC = "abcdefghijklmnopqrstuvwxyz";
-type CS = { s: "m" | "g" | "c"; ch: string };
-
-function Headline() {
-  const [cs, setCs] = useState<CS[]>(() => [...TITLE].map((ch) => ({ s: "c", ch })));
-  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const [run, setRun] = useState(0);
-  const [playing, setPlaying] = useState(!reduce);
-  useEffect(() => {
-    if (reduce) return;
-    setPlaying(true);
-    let left = [...TITLE].map((_, i) => i).filter((i) => TITLE[i] !== " ");
-    const STEPS = 16;
-    let step = 0;
-    setCs([...TITLE].map((ch) => ({ s: ch === " " ? "c" : "m", ch: "" })));
-    const id = setInterval(() => {
-      step++;
-      const take = step >= STEPS ? left.length : Math.ceil(left.length / (STEPS - step + 1));
-      const done = new Set<number>();
-      for (let j = 0; j < take; j++) done.add(left.splice(rnd(left.length), 1)[0]);
-      setCs((prev) =>
-        prev.map((c, i) => {
-          if (TITLE[i] === " " || done.has(i)) return { s: "c", ch: TITLE[i] };
-          if (left.includes(i))
-            return Math.random() < 0.45
-              ? { s: "g", ch: /[a-z]/i.test(TITLE[i]) ? ABC[rnd(26)] : TITLE[i] }
-              : { s: "m", ch: "" };
-          return c;
-        })
-      );
-      if (!left.length) { clearInterval(id); setPlaying(false); }
-    }, 110);
-    return () => clearInterval(id);
-  }, [run]);
-  let k = 0;
+/* ---------- the machine picker, shared by the shelf and the table ---------- */
+const HW = [
+  { id: "cpu", label: "No GPU" }, { id: "6", label: "6 GB" }, { id: "8", label: "8 GB" },
+  { id: "12", label: "12 GB" }, { id: "16", label: "16 GB" }, { id: "24", label: "24 GB" },
+];
+function Picker({ hw, setHw, label }: { hw: string; setHw: (v: string) => void; label: string }) {
   return (
-    <>
-      <h1 aria-label={TITLE}>
-        {TITLE.split(" ").map((w, wi, arr) => (
-          <span key={wi}>
-            <span className="w" aria-hidden="true">
-              {[...w].map((f) => {
-                const c = cs[k++] ?? { s: "c", ch: f };
-                return (
-                  <span key={k} className={`c ${c.s === "c" ? "" : c.s}`}>
-                    <i>{f}</i>
-                    <b>{c.ch}</b>
-                  </span>
-                );
-              })}
-            </span>
-            {wi < arr.length - 1 && " "}
-            {(k += 1) && null}
-          </span>
-        ))}
-      </h1>
-      {!reduce && (
-        <button className={`rp${playing ? " off" : ""}`} onClick={() => setRun((r) => r + 1)} aria-label="Replay headline animation" title="Replay" tabIndex={playing ? -1 : 0}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v5h5" /></svg>
-        </button>
-      )}
-    </>
+    <div className="pick" role="group" aria-label={label}>
+      {HW.map((o) => <button key={o.id} aria-pressed={hw === o.id} onClick={() => setHw(o.id)}>{o.label}</button>)}
+    </div>
   );
 }
+function verdict(hw: string) {
+  const n: Record<string, number> = { ok: 0, warn: 0, bad: 0, na: 0 };
+  SHELF.filter((m) => !m.listed).forEach((m) => { n[status(m, hw)[0]]++; });
+  const words: [string, string, string][] = hw === "cpu"
+    ? [["ok", "runs", "run"], ["warn", "runs slowly", "run slowly"], ["bad", "needs a GPU", "need a GPU"]]
+    : [["ok", "fits", "fit"], ["warn", "is tight", "are tight"], ["bad", "won’t fit", "won’t fit"], ["na", "has only been tested on CPU", "have only been tested on CPU"]];
+  const parts = words.filter(([k]) => n[k] > 0);
+  const lead = hw === "cpu" ? "With no GPU" : `With a${hw === "8" ? "n" : ""} ${hw} GB card`;
+  return <>{lead}: {parts.map(([k, one, many], i) => <span key={k}><strong>{n[k]}</strong> {n[k] === 1 ? one : many}{i < parts.length - 1 ? ", " : "."}</span>)}</>;
+}
 
-/* ---------- install ---------- */
-const CMDS = {
-  cpu: ["pip install ollada", "ollada pull sdar:1.7b", "ollada run sdar:1.7b"],
-  gpu: ["pip install ollada", "ollada pull sdar:4b", "ollada run sdar:4b"],
-};
-type FlowItem = { label: string; cmd?: string; body?: ReactNode };
-const CMD_LABELS = ["Install Ollada", "Download a model (one time)", "Start chatting"];
-const cmdItems = (cmds: string[]): FlowItem[] => cmds.map((cmd, i) => ({ label: CMD_LABELS[i], cmd }));
-
-function IconCopy({ text }: { text: string }) {
-  const [done, setDone] = useState(false);
-  const copy = () => {
-    navigator.clipboard?.writeText(text).then(() => {
-      setDone(true);
-      setTimeout(() => setDone(false), 1600);
-    }, () => {});
+/* ---------- the palette: the shelf as a launcher. Search it, move with the
+   arrow keys, Enter copies the pull command. Grouped by what runs on your GPU. ---------- */
+function famName(id: string) { return FAMILIES.find((f) => f.id === id)?.name ?? id; }
+function SearchIcon() {
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.2-4.2" /></svg>;
+}
+function Chevron() {
+  return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>;
+}
+function Palette({ hw, setHw }: { hw: string; setHw: (v: string) => void }) {
+  const [q, setQ] = useState("");
+  const [sel, setSel] = useState<string | null>(null);
+  const [copied, setCopied] = useState("");
+  const listRef = useRef<HTMLDivElement>(null);
+  const gpu = hw !== "cpu";
+  const tone = (m: M) => (m.listed ? "listed" : status(m, hw)[0]);
+  const titles: [string, string][] = gpu
+    ? [["ok", `Fits your ${hw} GB card`], ["warn", "Tight"], ["bad", "Won’t fit"], ["na", "Only tested on CPU"], ["listed", "Listed for context"]]
+    : [["ok", "Runs on CPU"], ["warn", "Runs, slowly"], ["bad", "Needs a GPU"], ["listed", "Listed for context"]];
+  const ql = q.trim().toLowerCase();
+  const hits = SHELF.filter((m) => !ql || `${m.n} ${m.use} ${famName(m.fam)}`.toLowerCase().includes(ql));
+  const groups = titles
+    .map(([k, title]) => ({ k, title, items: hits.filter((m) => tone(m) === k).sort((a, b) => a.peak - b.peak) }))
+    .filter((g) => g.items.length);
+  const flat = groups.flatMap((g) => g.items);
+  const cur = flat.find((m) => m.n === sel) ?? flat[0];
+  const show = (m: M) => {
+    setSel(m.n);
+    const el = listRef.current?.querySelector<HTMLElement>(`[data-n="${m.n}"]`);
+    const box = listRef.current;
+    if (el && box) {
+      if (el.offsetTop < box.scrollTop) box.scrollTop = el.offsetTop - 34;
+      else if (el.offsetTop + el.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTop = el.offsetTop + el.offsetHeight - box.clientHeight + 6;
+    }
   };
+  const move = (d: number) => {
+    if (!flat.length) return;
+    const i = Math.max(0, flat.indexOf(cur));
+    show(flat[(i + d + flat.length) % flat.length]);
+  };
+  const copyPull = (m?: M) => {
+    if (!m || m.listed) return;
+    const cmd = `ollada pull ${m.n}`;
+    navigator.clipboard?.writeText(cmd).then(() => { setCopied(m.n); setTimeout(() => setCopied(""), 1600); }, () => {});
+  };
+  const onKey = (e: RKeyboardEvent) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); move(1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); move(-1); }
+    else if (e.key === "Enter") { e.preventDefault(); copyPull(cur); }
+    else if (e.key === "Escape") setQ("");
+  };
+  const [ct, ctext] = cur ? (cur.listed ? ["listed", "Not on shelf"] : status(cur, hw)) : ["", ""];
   return (
-    <button className={`icopy${done ? " done" : ""}`} onClick={copy} aria-label={done ? "Copied" : `Copy: ${text}`} title="Copy">
-      {done ? (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
-      ) : (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>
-      )}
-    </button>
-  );
-}
-
-function Flow({ items, numbered = true }: { items: FlowItem[]; numbered?: boolean }) {
-  return (
-    <ol className={`flow${numbered ? "" : " plain"}`} role="list">
-      {items.map((it, i) => (
-        <li key={it.label}>
-          {numbered && <span className="fn" aria-hidden="true">{i + 1}</span>}
-          <p className="fl">{it.label}</p>
-          {it.body && <p className="fb">{it.body}</p>}
-          {it.cmd && (
-            <div className="pill">
-              <code><span className="p" aria-hidden="true">$ </span>{it.cmd}</code>
-              <IconCopy text={it.cmd} />
+    <div className="win palette">
+      <div className="pal-search">
+        <SearchIcon />
+        <input
+          type="text" role="combobox" aria-expanded="true" aria-controls="pal-list" aria-autocomplete="list"
+          aria-activedescendant={cur ? `opt-${cur.n.replace(/[:.]/g, "-")}` : undefined}
+          aria-label="Search the shelf" placeholder="Search the shelf…" spellCheck={false}
+          value={q} onChange={(e) => { setQ(e.target.value); setSel(null); }} onKeyDown={onKey}
+        />
+        <label className="pal-gpu">
+          <span>Your GPU</span>
+          <select value={hw} onChange={(e) => setHw(e.target.value)} aria-label="Your GPU memory">
+            {HW.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+          </select>
+          <Chevron />
+        </label>
+      </div>
+      <div className="pal-body">
+        <div className="pal-list" id="pal-list" role="listbox" aria-label="Models on the shelf" ref={listRef}>
+          {groups.map((g) => (
+            <div role="group" aria-label={g.title} key={g.k}>
+              <p className="pal-h" aria-hidden="true">{g.title}<span>{g.items.length}</span></p>
+              {g.items.map((m) => (
+                <div
+                  key={m.n} id={`opt-${m.n.replace(/[:.]/g, "-")}`} data-n={m.n} role="option" aria-selected={m === cur}
+                  className={`pal-row fam-${m.fam} t-${g.k}${m === cur ? " on" : ""}`}
+                  onClick={() => setSel(m.n)} onDoubleClick={() => copyPull(m)}
+                >
+                  <i className="pal-ic" aria-hidden="true" />
+                  <span className="pal-t"><code>{m.n}</code><span>{m.use}</span></span>
+                  {m.isNew && <span className="badge new">New</span>}
+                  <span className="pal-mem">{m.peak} GB</span>
+                </div>
+              ))}
             </div>
-          )}
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function Install() {
-  const [t, setT] = useState<"cpu" | "gpu">("cpu");
-  const cmds = cmdItems(CMDS[t]);
-  cmds[0] = { ...cmds[0], body: "Open a terminal, then run each command in order." };
-  const items: FlowItem[] = [
-    {
-      label: "Get Python 3.10 or newer",
-      body: <>Already have it? Skip to step 2. If not, the <a href="#install">step-by-step setup</a> gives you the right download for your system.</>,
-    },
-    ...cmds,
-  ];
-  return (
-    <div className="getrun">
-      <Tabs tabs={[{ id: "cpu", label: "Laptop (CPU)" }, { id: "gpu", label: "GPU" }]} value={t} onChange={(id) => setT(id as "cpu" | "gpu")} label="Install target" />
-      <div role="tabpanel" tabIndex={0}>
-        <Flow items={items} />
+          ))}
+          {!flat.length && <p className="pal-empty">Nothing on the shelf matches “{q}”.</p>}
+        </div>
+        {cur && (
+          <div className={`pal-detail fam-${cur.fam}${cur.listed ? " listed" : ""}`} aria-live="polite">
+            <div className="pd-head">
+              <i className="pal-ic big" aria-hidden="true" />
+              <div><code className="pd-name">{cur.n}</code><p>{famName(cur.fam)} · {cur.use}</p></div>
+            </div>
+            <p className={`badge st-${ct}`}><i aria-hidden="true" />{ctext}{gpu && ["ok", "warn", "bad"].includes(ct) && ` on a${hw === "8" ? "n" : ""} ${hw} GB card`}</p>
+            <dl className="pd-meta">
+              <div><dt>Peak memory</dt><dd>{cur.mem}</dd></div>
+              <div><dt>Speed</dt><dd>{cur.spd}</dd></div>
+              <div><dt>Measured on</dt><dd>{cur.on}</dd></div>
+              <div><dt>Run notes</dt><dd>{cur.date}</dd></div>
+            </dl>
+            {cur.listed
+              ? <p className="pd-off">Listed for context only. It isn’t on the shelf, so there’s no pull command.</p>
+              : <div className="pd-cmds"><Cmd cmd={`ollada pull ${cur.n}`} /><Cmd cmd={`ollada run ${cur.n}`} /></div>}
+          </div>
+        )}
+      </div>
+      <div className="pal-foot">
+        <span className="pal-sum">{verdict(hw)}</span>
+        <span className="pal-keys" aria-hidden="true">
+          <span><kbd>↑</kbd><kbd>↓</kbd> Move</span>
+          <span className="pk-copy">{cur && copied === cur.n ? "Copied" : "Copy pull"} <kbd>↵</kbd></span>
+        </span>
       </div>
     </div>
   );
 }
 
-/* ---------- denoising demo (illustrative simulation, not a real model) ---------- */
-const CMD = "ollada run sdar:1.7b";
-const PROMPT = "What is a diffusion language model?";
-const ANSWER = "Instead of writing left to right, it starts with a blank canvas and refines the whole answer at once.";
-const WORDS = ANSWER.split(" ");
-const key = (w: string) => w.toLowerCase().replace(/[^a-z]/g, "");
-const EASY = new Set("of to it a and the at with".split(" "));
-const HARD = new Set("left right writing blank canvas refines whole answer starts instead once".split(" "));
-const DIFF = WORDS.map((w, i) => (EASY.has(key(w)) ? 0.95 : HARD.has(key(w)) ? 0.45 : 0.7) + ((i * 7) % 5) * 0.01);
-const WRONG: Record<string, string[]> = { left: ["up", "back"], right: ["down", "front"], writing: ["reading", "walking"], blank: ["full", "dark"], canvas: ["page", "table"], refines: ["repeats", "erases"], whole: ["next", "last"], answer: ["word", "number"], starts: ["ends", "waits"], instead: ["because", "maybe"], once: ["twice", "later"] };
-const POOL = ["the", "a", "soft", "quiet", "very", "and", "of", "then"];
-const wrongTok = (w: string) => {
-  const c = WRONG[key(w)] ?? POOL;
-  let x = c[rnd(c.length)];
-  while (x === key(w)) x = POOL[rnd(POOL.length)];
-  if (/^[A-Z]/.test(w)) x = x[0].toUpperCase() + x.slice(1);
-  return x + (w.match(/[.,]+$/)?.[0] ?? "");
-};
+/* ---------- the same shelf, in detail ---------- */
+function PullButton({ m }: { m: M }) {
+  const cmd = `ollada pull ${m.n}`;
+  const [done, setDone] = useState(false);
+  const copy = () => navigator.clipboard?.writeText(cmd).then(() => { setDone(true); setTimeout(() => setDone(false), 1600); }, () => {});
+  return <button className={`pull${done ? " done" : ""}`} onClick={copy} aria-label={done ? "Copied" : `Copy: ${cmd}`} title={cmd}>{done ? "Copied" : "Copy pull"}<CopyIcon /></button>;
+}
+function Detail({ hw, setHw }: { hw: string; setHw: (v: string) => void }) {
+  return (
+    <details className="tbl-d">
+      <summary>Every model in one table</summary>
+      <Picker hw={hw} setHw={setHw} label="Your machine" />
+      <div className="tbl" role="table" aria-label="Models on the shelf">
+        <div className="tr th" role="row">
+          <span role="columnheader">Model</span><span role="columnheader">Good for</span><span role="columnheader">Peak memory</span><span role="columnheader">Speed</span><span role="columnheader">On your machine</span><span role="columnheader"><span className="sr">Pull</span></span>
+        </div>
+        {FAMILIES.map((f) => (
+          <div role="rowgroup" key={f.id}>
+            <div className="fam" role="row"><span role="cell"><i className={`dot fam-${f.id}`} aria-hidden="true" />{f.name}</span></div>
+            {SHELF.filter((m) => m.fam === f.id).map((m) => {
+              const [tone, text] = m.listed ? ["na", "Not verified"] : status(m, hw);
+              return (
+                <div className={`tr${m.listed ? " listed" : ""}`} role="row" key={m.n}>
+                  <span role="cell" className="c-name"><code>{m.n}</code>{m.isNew && <span className="tag">New</span>}{m.listed && <span className="tag off">Not on shelf</span>}<small>{m.on}</small></span>
+                  <span role="cell" className="c-use">{m.use}</span>
+                  <span role="cell" className="c-mem">{m.mem}</span>
+                  <span role="cell" className="c-spd">{m.spd}</span>
+                  <span role="cell" className={`c-st st-${tone}`}><i aria-hidden="true" />{text}</span>
+                  <span role="cell" className="c-pull">{m.listed ? null : <PullButton m={m} />}</span>
+                  <details className="c-notes"><summary>Run notes</summary><p>{m.date}</p></details>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
 
-type Sim = { masked: boolean[]; shown: string[]; bad: boolean[]; step: number };
-const fresh = (): Sim => ({ masked: WORDS.map(() => true), shown: WORDS.map(() => ""), bad: WORDS.map(() => false), step: 0 });
-
+/* ---------- how it writes: the live site's demo, played once when it comes into view ---------- */
 function Demo() {
-  const [steps, setSteps] = useState(8);
+  const [steps, setSteps] = useState(12);
   const [sim, setSim] = useState<Sim>(fresh);
   const [running, setRunning] = useState(false);
   const timer = useRef<number | undefined>(undefined);
-  const go = () => {
+  const box = useRef<HTMLDivElement>(null);
+  const started = useRef(false);
+  const go = (n = steps) => {
+    started.current = true;
     clearInterval(timer.current);
     let s = fresh();
-    setSim(s);
-    setRunning(true);
+    setSim(s); setRunning(true);
     timer.current = window.setInterval(() => {
       const step = s.step + 1;
-      const idx = s.masked.map((m, i) => (m ? i : -1)).filter((i) => i >= 0);
-      const k = Math.ceil(idx.length / (steps - step + 1));
-      const pick = idx.map((i) => [i, DIFF[i] + Math.random() * 0.2] as const).sort((a, b) => b[1] - a[1]).slice(0, k).map((p) => p[0]);
+      const idx = s.masked.map((mk, i) => (mk ? i : -1)).filter((i) => i >= 0);
+      const k = Math.ceil(idx.length / (n - step + 1));
+      const pick = idx.map((i) => [i, DIFF[i] + Math.random() * 0.2]).sort((a, b) => b[1] - a[1]).slice(0, k).map((p) => p[0]);
       const next: Sim = { masked: [...s.masked], shown: [...s.shown], bad: [...s.bad], step };
       pick.forEach((i) => {
         const wrong = Math.random() < (1 - DIFF[i]) * Math.min(1, (k - 1) / 6);
         next.masked[i] = false; next.bad[i] = wrong; next.shown[i] = wrong ? wrongTok(WORDS[i]) : WORDS[i];
       });
       idx.filter((i) => !pick.includes(i)).forEach((i) => {
-        next.shown[i] = Math.random() < 0.6 ? (Math.random() < DIFF[i] * (step / steps) ? WORDS[i] : wrongTok(WORDS[i])) : "";
+        next.shown[i] = Math.random() < 0.6 ? (Math.random() < DIFF[i] * (step / n) ? WORDS[i] : wrongTok(WORDS[i])) : "";
       });
-      s = next; setSim(next);
+      s = next;
+      setSim(next);
       if (next.masked.every((m) => !m)) { clearInterval(timer.current); setRunning(false); }
-    }, Math.max(90, 3600 / steps));
+    }, Math.max(90, 3600 / n));
   };
   useEffect(() => () => clearInterval(timer.current), []);
+  const goRef = useRef(go);
+  useEffect(() => { goRef.current = go; });
+  useEffect(() => {
+    const el = box.current;
+    if (!el || reduced() || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver((es) => {
+      if (!es.some((e) => e.isIntersecting) || started.current) return;
+      io.disconnect(); goRef.current();
+    }, { threshold: 0.6 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
   const left = sim.masked.filter(Boolean).length;
   const wrong = sim.bad.filter(Boolean).length;
-  const done = sim.step > 0 && left === 0;
-  const hint = steps <= 4 ? "Few steps: many words lock in at once and mistakes slip through." : steps >= 14 ? "Many steps: slower, but each word is chosen with more of the answer in view." : "A middle setting. Try the extremes.";
-  const caption = `Done in ${steps} steps${wrong ? `, with ${wrong} word${wrong > 1 ? "s" : ""} wrong. Try more steps.` : "."}`;
+  const finished = sim.step > 0 && left === 0;
+  const lit = finished ? 6 : Math.floor((sim.step / steps) * 6);
+  const hint = finished
+    ? `Done in ${steps} steps${wrong ? `, with ${wrong} word${wrong > 1 ? "s" : ""} wrong. Try more steps.` : "."}`
+    : steps <= 4 ? "Few steps: many words lock in at once and mistakes slip through."
+    : steps >= 14 ? "Many steps: slower, but each word is chosen with more of the answer in view."
+    : "A middle setting. Try the extremes.";
   return (
-    <div className="demo">
-      <div className="term">
-        <div className="bar" aria-hidden="true"><i /><i /><i /></div>
-        <div className="body">
-          <div><span className="pr">$ </span>{CMD}</div>
-          <div className="q"><span className="pr">&gt;&gt;&gt; </span>{PROMPT}</div>
-          <div className="ans" role="img" aria-label={ANSWER}>
-            {WORDS.map((w, i) => {
-              const cls = sim.masked[i] ? (sim.shown[i] ? "g" : "m") : sim.bad[i] && done ? "bad" : "";
-              return <span key={i} className={`tk ${cls}`} aria-hidden="true">{sim.masked[i] && !sim.shown[i] ? w : sim.shown[i] || w}</span>;
-            })}
+    <section id="demo" className="sec">
+      <div className="wrap">
+        <div className="sec-head">
+          <Progress lit={lit} />
+          <h2>How a diffusion model writes</h2>
+          <p className="sub">A diffusion model starts with a fully masked answer and fills it in over several passes, locking in the words it is most sure of first. The trade-off is real: too few steps and quality drops. That’s why every recipe on the shelf ships with a tested step count.</p>
+        </div>
+        <div className="win demo-win" tabIndex={0} aria-label="Demo: arrow keys change the steps, Enter runs it" onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return;
+          if (e.key === "ArrowLeft" && !running) { e.preventDefault(); setSteps((v) => Math.max(2, v - 1)); setSim(fresh()); }
+          else if (e.key === "ArrowRight" && !running) { e.preventDefault(); setSteps((v) => Math.min(WORDS.length, v + 1)); setSim(fresh()); }
+          else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); }
+        }}>
+          <div className="win-bar" aria-hidden="true"><span className="dots"><i /><i /><i /></span><span className="win-title">{CMD}</span></div>
+          <div className="demo">
+          <div className="term" ref={box}>
+            <p className="prompt"><span aria-hidden="true">$ </span>{CMD}<br /><span aria-hidden="true">&gt;&gt;&gt; </span>{PROMPT}</p>
+            <p className="ans" role="img" aria-label={WORDS.join(" ")}>
+              {WORDS.map((w, i) => {
+                const masked = sim.masked[i] && !sim.shown[i];
+                const guess = sim.masked[i] && !!sim.shown[i];
+                const bad = !sim.masked[i] && sim.bad[i] && finished;
+                return <span key={i} aria-hidden="true" className={`tk${masked ? " m" : guess ? " g" : bad ? " bad" : ""}`}>{masked ? w : sim.shown[i] || w}</span>;
+              })}
+            </p>
+          </div>
+          <div className="dial">
+            <label htmlFor="steps">Denoising steps: <strong>{steps}</strong></label>
+            <input id="steps" type="range" min={2} max={WORDS.length} value={steps} disabled={running} onChange={(e) => { setSteps(+e.target.value); setSim(fresh()); }} />
+            <button className="run" onClick={() => go()}>{running ? "Restart" : finished ? "Run again" : "Run"}</button>
+            <p className="stat">step {sim.step}/{steps} · {WORDS.length - left} of {WORDS.length} words committed{finished ? ` · ${wrong} wrong` : ""}</p>
+            <p className="hint" aria-live="polite">{hint}</p>
+            <p className="keys" aria-hidden="true"><kbd>←</kbd><kbd>→</kbd> steps <kbd>↵</kbd> run</p>
+          </div>
           </div>
         </div>
       </div>
-      <div className="ctl">
-        <label htmlFor="steps">Denoising steps: {steps}</label>
-        <input id="steps" type="range" min={2} max={WORDS.length} value={steps} disabled={running} onChange={(e) => setSteps(+e.target.value)} />
-        <button className="btn" onClick={go}>{running ? "Restart" : done ? "Run again" : "Run"}</button>
-        <p className="stat">step {sim.step}/{steps}<br />{WORDS.length - left} of {WORDS.length} words committed{done ? ` · ${wrong} wrong` : ""}</p>
-        <p className="hint">{done ? caption : hint}</p>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- shelf ---------- */
-type M = { n: string; use: string; on: string; date: string; mem: string; peak: number; spd: string; kind: "gpu" | "both" | "cpu" };
-const SHELF: M[] = [
-  { n: "diffcoder:8b", use: "Coding", on: "Desktop RTX 5060 Ti (15.9 GB), Windows 11", date: "2026-10-25 · also T4 (Colab) 2026-10-21: 15.15 GB · tight fit, ~1.2 GB spare on a display-driving card", mem: "13.65 GB VRAM", peak: 13.65, spd: "~4.1 tok/s", kind: "gpu" },
-  { n: "diffcoder:8b4bit", use: "Coding, fits 8 GB cards", on: "NVIDIA A100-SXM4-80GB (Colab)", date: "2026-11-06 · fixed set 3/3 — train 90 km/h 35.4s, Paris 18.7s, fib 26.2s · desktop 5060 Ti verification still pending", mem: "6.59 GB VRAM", peak: 6.59, spd: "—", kind: "gpu" },
-  { n: "dream:7b", use: "General flagship", on: "Desktop RTX 5060 Ti (15.9 GB), Windows 11", date: "2026-10-25 · also T4 (Colab) 2026-10-21: 9.80 GB · noisy on the fixed set, see below", mem: "9.13 GB VRAM", peak: 9.13, spd: "~6.7 tok/s", kind: "gpu" },
-  { n: "sdar:4b", use: "General, strongest per size", on: "Desktop RTX 5060 Ti (15.9 GB), Windows 11", date: "2026-10-25 · also T4 (Colab, High-RAM) 2026-10-21: 8.87 GB · also laptop CPU 2026-10-23: 8.6 GB host RAM, 63.5s / 2.4s / 16.2s, 4-step floor", mem: "8.34 GB VRAM", peak: 8.34, spd: "~12 tok/s", kind: "both" },
-  { n: "nemotron:3b", use: "NVIDIA tri-mode", on: "Desktop RTX 5060 Ti (15.9 GB), Windows 11 · also laptop CPU", date: "2026-11-01 · desktop GPU: fixed set 3/3 (Paris, train 90 km/h, fib correct; no VRAM peak recorded) · laptop CPU 2026-10-26: Paris 17.9s, train 90 km/h ~60s, fib 19.0s · mini code eval 11/12", mem: "7.7 GB weights", peak: 7.66, spd: "—", kind: "both" },
-  { n: "sdar:1.7b", use: "The CPU pick", on: "Intel Core Ultra 7 365 laptop, 32 GB, Windows 11", date: "2026-10-23 · CPU only", mem: "3.9 GB RAM", peak: 3.9, spd: "~6.1 tok/s", kind: "cpu" },
-];
-function status(m: M, hw: string): [string, string] {
-  if (hw === "cpu") return m.kind === "gpu" ? ["bad", "Needs a GPU"] : m.kind === "both" ? ["warn", "Runs, slowly"] : ["ok", "Runs on CPU"];
-  if (m.kind === "cpu") return ["na", "Not verified on GPU"];
-  const room = +hw - m.peak;
-  return room >= 1 ? ["ok", "Fits"] : room >= 0 ? ["warn", "Tight"] : ["bad", "Won’t fit"];
-}
-function Shelf() {
-  const [hw, setHw] = useState("cpu");
-  return (
-    <section id="shelf">
-      <h2>The shelf</h2>
-      <p className="sub">Six models, each run through Ollada’s own code on the hardware listed. Pick your machine to see what fits before you download anything.</p>
-      <div className="fit">
-        <label htmlFor="hw">Your machine</label>
-        <select id="hw" value={hw} onChange={(e) => setHw(e.target.value)}>
-          <option value="cpu">Laptop, no GPU</option>
-          {[6, 8, 12, 16, 24].map((g) => <option key={g} value={g}>GPU with {g} GB</option>)}
-        </select>
-      </div>
-      <p className="sub">No GPU? nemotron:3b and sdar:1.7b run on CPU.</p>
-      <div className="scroll">
-        <table>
-          <thead><tr><th>Model</th><th>Good for</th><th>Verified on</th><th>Peak memory</th><th>Speed</th><th>On your machine</th></tr></thead>
-          <tbody>
-            {SHELF.map((m) => {
-              const [c, t] = status(m, hw);
-              return (
-                <tr key={m.n}>
-                  <td className="n">{m.n}</td><td>{m.use}</td>
-                  <td>{m.on}<small className="rn-d">{m.date}</small><details className="rn-m"><summary>Run notes</summary><small>{m.date}</small></details></td>
-                  <td className="num">{m.mem}</td><td className="num">{m.spd}</td>
-                  <td><span className={`st ${c}`}>{t}</span></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <p className="fine">Peak memory is the latest measurement per model: desktop RTX 5060 Ti (2026-10-25) for diffcoder:8b, dream:7b and sdar:4b, A100 (Colab, 2026-11-06) for diffcoder:8b4bit, laptop CPU (2026-10-23) for sdar:1.7b, and weights (7.66 GB, no GPU VRAM peak recorded) for nemotron:3b, whose desktop GPU run was 2026-11-01 and laptop CPU run was 2026-10-26. Speed is canvas tokens per second at the recipe defaults, measured by the Ollada project on T4 (2026-10-21) for the GPU models and on the laptop CPU for sdar:1.7b; nemotron:3b's speed is given as fixed-set times, not tok/s. The fit column is a simplified estimate (fits with 1 GB to spare, tight under that); <code>ollada recommend</code> uses the recorded measurements.</p>
     </section>
   );
 }
 
-/* ---------- mobile nav (burger at ≤640px, plain row on desktop) ---------- */
-function NavMenu() {
-  const [open, setOpen] = useState(false);
-  const close = () => setOpen(false);
-  useEffect(() => {
-    if (!open) return;
-    const y0 = window.scrollY;
-    const f = () => { if (Math.abs(window.scrollY - y0) > 40) setOpen(false); };
-    window.addEventListener("scroll", f, { passive: true });
-    return () => window.removeEventListener("scroll", f);
-  }, [open]);
-  return (
-    <div className="navwrap">
-      <button className="burger" aria-label="Menu" aria-expanded={open} onClick={() => setOpen(!open)}>☰</button>
-      <nav aria-label="Primary" className={open ? "open" : ""}>
-        <a href="#demo" onClick={close}>Demo</a>
-        <a href="#shelf" onClick={close}>Shelf</a>
-        <a href="#api" onClick={close}>Local API</a>
-        <a href="https://github.com/OpenSourceRulesz/ollada" onClick={close}>GitHub</a>
-        <a href="https://pypi.org/project/ollada/" onClick={close}>PyPI</a>
-        <a href="#install" className="cta" onClick={close}>Get started</a>
-      </nav>
-    </div>
-  );
-}
-
-/* ---------- use it from code ---------- */
-const SERVE = `ollada serve`;
-const CURL = `curl http://localhost:11435/api/chat \\
-  -H "Content-Type: application/json" \\
-  -d '{"model":"sdar:1.7b","messages":[{"role":"user","content":"What is the capital of France? Answer with exactly one word."}]}'`;
-const PS = `Invoke-RestMethod -Uri http://localhost:11435/api/chat -Method Post -ContentType "application/json" -Body '{"model":"sdar:1.7b","messages":[{"role":"user","content":"What is the capital of France? Answer with exactly one word."}]}'`;
-const JS = `const res = await fetch("http://localhost:11435/api/chat", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    model: "sdar:1.7b",
-    messages: [{ role: "user", content: "What is the capital of France? Answer with exactly one word." }],
-  }),
-});
-const data = await res.json();
-console.log(data.message.content); // Paris`;
-const PY = `import json, urllib.request
-
-req = urllib.request.Request(
-    "http://localhost:11435/api/chat",
-    data=json.dumps({
-        "model": "sdar:1.7b",
-        "messages": [{"role": "user", "content": "What is the capital of France? Answer with exactly one word."}],
-    }).encode(),
-    headers={"Content-Type": "application/json"},
-)
-with urllib.request.urlopen(req) as resp:
-    print(json.load(resp)["message"]["content"])  # Paris`;
-function Api() {
-  const [tab, setTab] = useState<"curl" | "ps" | "js" | "py">("curl");
-  const [copyLabel, setCopyLabel] = useState("Copy");
-  const labels = { curl: "curl", ps: "PowerShell", js: "JavaScript (Node)", py: "Python" };
-  const bodies = { curl: CURL, ps: PS, js: JS, py: PY };
-  const copy = () => {
-    navigator.clipboard?.writeText(bodies[tab]).then(
-      () => setCopyLabel("Copied"),
-      () => setCopyLabel("Select and copy")
-    );
-    setTimeout(() => setCopyLabel("Copy"), 1600);
-  };
-  return (
-    <section id="api">
-      <h2>Local API</h2>
-      <p className="sub">Start the server, then point any tool that speaks HTTP at it. The chat endpoint is Ollama-shaped; there is also <code>POST /api/generate</code> for a single prompt, OpenAI-shaped <code>POST /v1/chat/completions</code>, and prompt-only <code>POST /v1/completions</code> for editors.</p>
-      <pre className="code">{SERVE}</pre>
-      <div className="cmdbox">
-        <Tabs tabs={(["curl", "ps", "js", "py"] as const).map((x) => ({ id: x, label: labels[x] }))} value={tab} onChange={(id) => setTab(id as "curl" | "ps" | "js" | "py")} label="Code example language" />
-        <div role="tabpanel" tabIndex={0}>
-          {tab === "ps" && <p className="fine">On Windows PowerShell, <code>curl.exe</code> mangles the quoted JSON — use this instead:</p>}
-          <div className="copyrow"><button className="copy" onClick={copy}>{copyLabel}</button></div>
-          <pre className="code">{bodies[tab]}</pre>
-        </div>
-      </div>
-      <p className="fine">The answer arrives whole, in one JSON object — no streaming. If the model won’t fit your machine you’ll get HTTP 409 instead of a crash (pass <code>{'options: {"force": true}'}</code> to override, the same as the CLI’s <code>--force</code>).</p>
-    </section>
-  );
-}
-
-/* ---------- how to install (guided path; the hero box is the quick path) ---------- */
-const VENV = `python3 -m venv ~/.ollada-venv
-source ~/.ollada-venv/bin/activate`;
-const VENV_PS = `py -m venv $HOME\\.ollada-venv
-& $HOME\\.ollada-venv\\Scripts\\Activate.ps1`;
-/* One command block, in the hero box style, with its own Copy row.
-   Used for the three expander blocks so each copies only itself:
-   copying the whole guide would hand a Windows user the Mac block
-   too. The Copy row sits above the code (not overlaid on it) so
-   it never covers a long line, as the API blocks learned. */
-function CmdBlock({ text }: { text: string }) {
-  const [label, setLabel] = useState("Copy");
-  const copy = () => {
-    navigator.clipboard?.writeText(text).then(
-      () => setLabel("Copied"),
-      () => setLabel("Select and copy")
-    );
-    setTimeout(() => setLabel("Copy"), 1600);
-  };
-  return (
-    <div className="cmdbox">
-      <div className="copyrow"><button className="copy" onClick={copy}>{label}</button></div>
-      <pre className="code">{text}</pre>
-    </div>
-  );
-}
-function detectOs(): "mac" | "win" | "linux" {
-  const ua = (typeof navigator !== "undefined" ? navigator.userAgent : "").toLowerCase();
-  if (ua.includes("windows")) return "win";
-  if (ua.includes("linux") && !ua.includes("android")) return "linux";
-  return "mac";
-}
-
+/* ---------- get started ---------- */
 function GetStarted() {
   const [os, setOs] = useState<"mac" | "win" | "linux">(detectOs);
-  const osTabs = [{ id: "mac", label: "Mac" }, { id: "win", label: "Windows" }, { id: "linux", label: "Linux" }];
   const venv = os === "win" ? VENV_PS : VENV;
-  const venvLabel = os === "win" ? "Windows PowerShell" : "Mac / Linux";
   return (
-    <section id="install">
-      <h2>Get started</h2>
-      <p className="sub">Three steps, then the quick commands just work.</p>
-      <div className="osrow">
-        <span>Your system</span>
-        <Tabs tabs={osTabs} value={os} onChange={(id) => setOs(id as "mac" | "win" | "linux")} label="Operating system" />
+    <section id="install" className="sec">
+      <div className="sec-head">
+        <Squares />
+        <h2>Get started</h2>
+        <p className="sub">Three steps, then the quick commands just work.</p>
       </div>
-      <ol className="steps">
-        <li>
-          <h3>Install Python</h3>
-          <p>Python 3.10 or newer — any version pip supports. It is only the installer: <code>pip install ollada</code> bundles the Rust binary, which runs the CLI, the server, and the worker setup. No extras to pick.{os === "mac" && " The Python that ships with a Mac is 3.9, which is too old."}</p>
-          {os === "linux" ? (
-            <p>Most Linux distributions include Python. Check with <code>python3 --version</code>; if it’s older than 3.10, install a newer one with your package manager, or get it from <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a>.</p>
-          ) : (
-            <p><a className="pbtn" href={os === "win" ? "https://www.python.org/downloads/windows/" : "https://www.python.org/downloads/macos/"} target="_blank" rel="noopener">Download Python for {os === "win" ? "Windows" : "Mac"}</a></p>
-          )}
-          {os === "win" && <p className="fine">During install, tick ‘Add python.exe to PATH’.</p>}
-          {os === "mac" && <p className="fine">After installing, also run the Install Certificates step for the version you installed — for example: <code>open "/Applications/Python 3.12/Install Certificates.command"</code>. Without it, the SDAR load fails with an SSL certificate error.</p>}
-          <p className="fine">One caveat: the first model run builds a worker environment that installs torch, and torch only ships wheels for the Pythons it supports — on a brand-new Python release that build can fail. If it does, use the previous Python release.</p>
-        </li>
-        <li>
-          <h3>Open a terminal</h3>
+      <div className="slab">
+        <div className="osrow">
+          <span>Your system</span>
+          <Tabs tabs={[{ id: "mac", label: "Mac" }, { id: "win", label: "Windows" }, { id: "linux", label: "Linux" }]} value={os} onChange={(id) => setOs(id as "mac" | "win" | "linux")} label="Operating system" />
+        </div>
+        <ol className="steps">
+          <li className="s1">
+            <h3><span className="num" aria-hidden="true">1</span>Install Python</h3>
+            <p>You need Python 3.10 or newer. It only installs Ollada: the CLI, the server and the worker setup run from one bundled binary.{os === "mac" && " The Python that ships with a Mac is 3.9, which is too old."}</p>
+            {os === "linux" ? (
+              <p>Most Linux distributions include Python. Check with <code>python3 --version</code>; if it’s older than 3.10, install a newer one with your package manager, or get it from <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a>.</p>
+            ) : (
+              <p><a className="btn" href={os === "win" ? "https://www.python.org/downloads/windows/" : "https://www.python.org/downloads/macos/"} target="_blank" rel="noopener">Download Python for {os === "win" ? "Windows" : "Mac"}</a></p>
+            )}
+            {os === "win" && <p className="must"><Alert /><span><strong>Don’t skip:</strong> during install, tick ‘Add python.exe to PATH’.</span></p>}
+            {os === "mac" && <p className="must"><Alert /><span><strong>Don’t skip:</strong> after installing, run the Install Certificates step for the version you installed, for example <code>open "/Applications/Python 3.12/Install Certificates.command"</code>. Without it, the SDAR load fails with an SSL certificate error.</span></p>}
+          </li>
+          <li className="s2">
+            <h3><span className="num" aria-hidden="true">2</span>Open a terminal</h3>
             {os === "mac" && <p>Terminal: Applications → Utilities, or Spotlight → Terminal.</p>}
             {os === "win" && <p>PowerShell or Terminal.</p>}
             {os === "linux" && <p>Your terminal.</p>}
-        </li>
-        <li>
-          <h3>Run the commands</h3>
-          <p>First, make a virtual environment. Some systems refuse to install packages outside one:</p>
-          <p><strong>{venvLabel}:</strong></p>
-          <CmdBlock text={venv} />
-          <p><strong>Then run these one at a time, in order:</strong></p>
-          <Flow items={cmdItems(CMDS.cpu)} numbered={false} />
-          <p className="fine">Check first: <code>pip show ollada</code> should say 0.3.7, and <code>ollada list</code> should show six models including sdar:1.7b. At the <code>&gt;&gt;&gt;</code> prompt, ask: What is the capital of France? Answer with exactly one word. Expect Paris. Ctrl-C quits. NVIDIA GPU? Same steps — no extra needed; the first run picks CPU or CUDA torch for you.</p>
-        </li>
-      </ol>
-      <details>
-        <summary>Windows PATH, PowerShell, GPU, what to expect, if it fails</summary>
-        <dl>
-          <dt>Windows PATH</dt>
-          <dd>If <code>py</code> is not found, or you get the Microsoft Store stub (“Python was not found”), that is not real Python. Install from <a href="https://www.python.org/downloads/windows/" target="_blank" rel="noopener">python.org/downloads/windows/</a> and tick ‘Add python.exe to PATH’.</dd>
-          <dt>PowerShell execution policy</dt>
-          <dd>If PowerShell refuses to run the activate script, run <code>Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass</code> first, then activate again.</dd>
-          <dt>NVIDIA GPU</dt>
-          <dd>No extra install — plain <code>pip install ollada</code>. The worker env pulls CUDA torch on an NVIDIA machine and CPU torch otherwise. DiffCoder is a tight fit on a 16 GB card — close other GPU apps first.</dd>
-          <dt>What to expect</dt>
-          <dd>The first run is slow twice: the model download (about 4 GB for sdar:1.7b) and a one-time worker-environment build (torch plus transformers, a few hundred MB). Later runs skip both. On CPU, short answers take seconds, long ones up to a minute.</dd>
-          <dt>If it fails</dt>
-          <dd><code>command not found: pip</code> or <code>python3</code> — Python is not installed or not on PATH. See step 1. <code>externally managed environment</code> — you are not inside a virtual environment. See step 3. <code>requires Python &gt;= 3.10</code> — your Python is too old. See step 1. SSL <code>CERTIFICATE_VERIFY_FAILED</code> on a Mac — run the Install Certificates step in step 1. Anything else — copy the whole error; that is what is needed to help.</dd>
-        </dl>
-      </details>
+          </li>
+          <li className="s3">
+            <h3><span className="num" aria-hidden="true">3</span>Run the commands</h3>
+            <p>First, make a virtual environment. Some systems refuse to install packages outside one. <strong>{os === "win" ? "Windows PowerShell" : "Mac / Linux"}:</strong></p>
+            <Code text={venv} label="Copy the virtual environment commands" />
+            <p><strong>Then run these one at a time, in order.</strong> They use sdar:1.7b because it’s the smallest model on the shelf and runs without a GPU.</p>
+            <ol className="cmds">
+              {CMDS.cpu.map((c, i) => <li key={c}><span className="lbl">{CMD_LABELS[i]}</span><Cmd cmd={c} /></li>)}
+            </ol>
+            <p className="fine">Check first: <code>pip show ollada</code> should say 0.3.7, and <code>ollada list</code> should show six models including sdar:1.7b. At the <code>&gt;&gt;&gt;</code> prompt, ask: What is the capital of France? Answer with exactly one word. Expect Paris. Ctrl-C quits. NVIDIA GPU? Same steps — no extra needed; the first run picks CPU or CUDA torch for you.</p>
+          </li>
+        </ol>
+        <details className="more-d">
+          <summary>Windows PATH, PowerShell, GPU, what to expect, if it fails</summary>
+          <dl>
+            <dt>Windows PATH</dt>
+            <dd>If <code>py</code> is not found, or you get the Microsoft Store stub (“Python was not found”), that is not real Python. Install from <a href="https://www.python.org/downloads/windows/" target="_blank" rel="noopener">python.org/downloads/windows/</a> and tick ‘Add python.exe to PATH’.</dd>
+            <dt>PowerShell execution policy</dt>
+            <dd>If PowerShell refuses to run the activate script, run <code>Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass</code> first, then activate again.</dd>
+            <dt>NVIDIA GPU</dt>
+            <dd>No extra install — plain <code>pip install ollada</code>. The worker env pulls CUDA torch on an NVIDIA machine and CPU torch otherwise. DiffCoder is a tight fit on a 16 GB card — close other GPU apps first.</dd>
+            <dt>What to expect</dt>
+            <dd>The first run is slow twice: the model download (about 4 GB for sdar:1.7b) and a one-time worker-environment build (torch plus transformers, a few hundred MB). Later runs skip both. On CPU, short answers take seconds, long ones up to a minute.</dd>
+            <dt>If it fails</dt>
+            <dd><code>command not found: pip</code> or <code>python3</code> — Python is not installed or not on PATH. See step 1. <code>externally managed environment</code> — you are not inside a virtual environment. See step 3. <code>requires Python &gt;= 3.10</code> — your Python is too old. See step 1. SSL <code>CERTIFICATE_VERIFY_FAILED</code> on a Mac — run the Install Certificates step in step 1. The worker-environment build fails on the first model run — torch only ships wheels for the Pythons it supports, so a brand-new Python release can break it; use the previous Python release. Anything else — copy the whole error; that is what is needed to help.</dd>
+          </dl>
+        </details>
+      </div>
     </section>
   );
 }
 
-function Strip() {
-  return <div className="strip" aria-hidden="true">{[0, 1, 2, 3, 4, 5].map((i) => <i key={i} />)}</div>;
-}
-function Band({ tone = "", strip = true, children }: { tone?: string; strip?: boolean; children: ReactNode }) {
+/* ---------- local API ---------- */
+function Api() {
+  const [tab, setTab] = useState("curl");
+  const bodies: Record<string, string> = { curl: CURL, ps: PS, js: JS, py: PY };
   return (
-    <div className={`band ${tone}`.trim()}>
-      <div className="wrap">
-        {strip && <Strip />}
-        {children}
+    <section id="api" className="sec">
+      <div className="sec-head">
+        <Squares />
+        <h2>Local API</h2>
+        <p className="sub">Start the server, then point any tool that speaks HTTP at it.</p>
       </div>
-    </div>
+      <div className="api">
+        <div>
+          <h3>Start the server</h3>
+          <Cmd cmd={SERVE} />
+          <h3 className="gap">Endpoints</h3>
+          <ul className="eps">
+            <li><code>POST /api/chat</code><span>Chat, Ollama-shaped</span></li>
+            <li><code>POST /api/generate</code><span>A single prompt</span></li>
+            <li><code>POST /v1/chat/completions</code><span>Chat, OpenAI-shaped</span></li>
+            <li><code>POST /v1/completions</code><span>Prompt-only, for editors</span></li>
+          </ul>
+        </div>
+        <div>
+          <div className="row">
+            <h3>Call it</h3>
+            <Tabs tabs={[{ id: "curl", label: "curl" }, { id: "ps", label: "PowerShell" }, { id: "js", label: "Node.js" }, { id: "py", label: "Python" }]} value={tab} onChange={setTab} label="Language" />
+          </div>
+          {tab === "ps" && <p className="fine top">On Windows PowerShell, <code>curl.exe</code> mangles the quoted JSON — use this instead:</p>}
+          <Code text={bodies[tab]} label="Copy this example" />
+          <div className="resp">
+            <p className="resp-h">What comes back</p>
+            <pre>{"{\n  \"model\": \"sdar:1.7b\",\n  \"message\": { \"role\": \"assistant\", \"content\": "}<span className="ok">"Paris"</span>{" },\n  \"done\": true,\n  \"eval_count\": <tokens>,\n  \"eval_duration_s\": <seconds>,\n  \"nfe\": <model calls>\n}"}</pre>
+          </div>
+          <p className="fine">The answer arrives whole, in one JSON object — no streaming. If the model won’t fit your machine you’ll get HTTP 409 instead of a crash (pass <code>{'options: {"force": true}'}</code> to override, the same as the CLI’s <code>--force</code>).</p>
+        </div>
+      </div>
+    </section>
   );
 }
 
-function useTopbar() {
-  const [scrolled, setScrolled] = useState(false);
-  const [hidden, setHidden] = useState(false);
-  useEffect(() => {
-    let last = window.scrollY;
-    const onScroll = () => {
-      const y = window.scrollY;
-      setScrolled(y > 8);
-      if (Math.abs(y - last) < 6) return;
-      const phone = window.matchMedia("(max-width: 640px)").matches;
-      setHidden(phone && y > last && y > 120);
-      last = y;
-    };
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-  return { scrolled, hidden };
-}
-
 export default function App() {
-  const { scrolled, hidden } = useTopbar();
+  const [hw, setHw] = useState("8");
   return (
-    <div>
-      <div className={`topbar${scrolled ? " scrolled" : ""}${hidden ? " hide" : ""}`}>
-      <div className="wrap">
-      <header>
+    <div className="site">
+      <header className="wrap bar">
         <a className="brand" href="#top" aria-label="Ollada home">
-          <svg width="52" height="49" viewBox="12 24 106 100" fill="#6C6FD8" aria-hidden="true">
-            {[[26,34],[22,76],[38,114],[72,74],[108,52],[108,96]].map(([x,y],i)=><circle key={i} cx={x} cy={y} r="10"/>)}
-          </svg>
+          <svg width="34" height="32" viewBox="12 24 106 100" fill="#6C6FD8" aria-hidden="true"><circle cx="26" cy="34" r="10" /><circle cx="22" cy="76" r="10" /><circle cx="38" cy="114" r="10" /><circle cx="72" cy="74" r="10" /><circle cx="108" cy="52" r="10" /><circle cx="108" cy="96" r="10" /></svg>
           Ollada
         </a>
-        <NavMenu />
+        <nav aria-label="Primary">
+          <a href="#shelf">Shelf</a>
+          <a href="#demo">How it writes</a>
+          <a href="#api">Local API</a>
+          <a href="https://github.com/OpenSourceRulesz/ollada">GitHub</a>
+          <a className="cta" href="#install">Install</a>
+        </nav>
       </header>
-      </div>
-      </div>
       <main id="top">
-        <div className="wrap"><div className="hero">
-          <div className="hero-main">
+        <section className="hero">
+          <div className="wrap hero-in">
             <Headline />
-            <p className="mission">Open-source diffusion language models on your own machine, with every number measured on real hardware.</p>
-            <Install />
-            <p className="hook"><strong>sdar:1.7b runs on a laptop CPU, no GPU:</strong> 3.9 GB RAM at its observed peak.</p>
+            <p className="lede">Open-source diffusion language models on your own machine, with every number measured on real hardware.</p>
+            <div className="hero-act">
+              <a className="btn" href="#install">Get started</a>
+              <Cmd cmd="pip install ollada" />
+            </div>
+            <p className="then">Needs Python 3.10 or newer.</p>
           </div>
-        </div></div>
-        <Band tone="well"><section id="demo">
-          <h2>How a diffusion model writes</h2>
-          <p className="sub">A diffusion model starts with a fully masked answer and fills it in over several passes, locking in the words it is most sure of first. The trade-off is real: too few steps and quality drops. That’s why every recipe on the shelf ships with a tested step count.</p>
-          <Demo />
-        </section></Band>
-        <Band tone="shelf"><Shelf /></Band>
-        <Band><section id="tested">
-          <h2>Tested on real hardware</h2>
-          <p className="sub">Desktop RTX 5060 Ti (15.9 GB), 2026-10-25: all three GPU models fit. DiffCoder is tight, so close other GPU apps first. Dream’s output varies between runs. Nemotron joined them on the same card on 2026-11-01: fixed set 3/3, no VRAM peak recorded. Full notes in <a href="https://github.com/OpenSourceRulesz/ollada/blob/main/docs/FINDINGS.md">Findings</a>.</p>
-          <details>
-            <summary>Per-model findings</summary>
-            <dl>
-            <dt>DiffCoder:8b — 13.65 GB, fits but tight (about 1.2 GB spare on a display-driving card)</dt>
-            <dd>Fixed set steady; variants wobble: the 60/45 train problem came out 40 km/h (a 45/60 = 3/2 slip), a docstring Fibonacci was cut off at the 256-token canvas, and ‘one word’ without ‘exactly’ went verbose.</dd>
-            <dt>DiffCoder:8b4bit — 6.59 GB on an A100 (Colab), 2026-11-06, fixed set 3/3</dt>
-            <dd>Same model in 4-bit (NF4, weight-only): train 90 km/h in 35.4s, Paris in 18.7s, fib correct in 26.2s. Roughly half the int8 peak, so it fits an 8 GB card. Desktop 5060 Ti verification still pending. Independent 4-bit quality numbers (standalone Colab, not through ollada): HumanEval full 164 at 81.1%, HumanEval+ first 50 at 88.0% — the paper never tested 4-bit.</dd>
-            <dt>Dream:7b — 9.13 GB, fits</dt>
-            <dd>The morning fixed set passed clean (90 km/h, ‘Paris’, clean Fibonacci, about 30 s each), but wider runs on the same set failed twice on the train problem and once on Fibonacci. At temperature 0.2 that reads as sampling noise, not a deterministic break — but Dream is the variable one of the three.</dd>
-            <dt>SDAR:4b — 8.34 GB, fits, peak stable across 15 observations</dt>
-            <dd>Fixed set and variants all correct, and the server path works: POST /api/chat answered ‘Paris’ with done=True.</dd>
-            <dt>Nemotron:3b — desktop GPU 2026-11-01, fixed set 3/3, no VRAM peak recorded</dt>
-            <dd>Capital exactly ‘Paris’, train 90 km/h with clean working, fib iterative and correct. First capital run (88.4s) included the one-time worker-env build and the 7.66 GB weight download; later runs were 15.2s / 15.1s (train, repeated) and 13.3s (fib), times including cold load per CLI run. Use the ollada venv Python on this machine — system Python 3.12 lacks PyYAML and fails before any model work.</dd>
-            <dt>Install findings</dt>
-            <dd>A fresh [gpu] install lands transformers 5.x, which breaks Dream (use 4.57.6), and torch from plain PyPI was CUDA-blind on this card (use the PyTorch CUDA index). Both are encoded in the per-family worker environments.</dd>
-          </dl>
-          </details>
-        </section></Band>
-        <Band tone="raised"><GetStarted /></Band>
-        <Band><Api /></Band>
-        <Band tone="light"><section>
-          <h2>Ground rules</h2>
-          <dl>
-            <dt>Free and local</dt><dd>Runs entirely on your computer. Ollada doesn't track your usage or send your prompts back to us. No paid services. MIT licensed.</dd>
-            <dt>Honest about hardware</dt><dd>Dream and DiffCoder need a GPU. The SDAR models and Nemotron run on a laptop CPU — slower, but no GPU required.</dd>
-            <dt>Our numbers only</dt><dd>Vendor benchmarks are never shown as Ollada measurements.</dd>
-          </dl>
-        </section></Band>
+          <div className="wrap stage" id="shelf">
+            <Palette hw={hw} setHw={setHw} />
+            <p className="fine pal-fine">Seven models in four families, each run through Ollada’s own code on the hardware listed. Fit is a simplified estimate (fits with 1 GB to spare, tight under that); <code>ollada recommend</code> uses the recorded measurements. The 4-bit variants were measured on an A100 (Colab) with desktop verification still pending; nemotron:8b6bit is listed for context only.</p>
+            <Detail hw={hw} setHw={setHw} />
+          </div>
+        </section>
+        <Demo />
+        <div className="wrap">
+          <GetStarted />
+          <Api />
+        </div>
       </main>
-      <Band tone="well" strip={false}><footer>
-        <p>Version 0.3.7 — six models verified on named hardware. 0.3.7 ships the Rust front-end: pip install now bundles a single binary, with the same Python workers underneath. Named the way Ollama was: Ollama ← LLaMA, Ollada ← LLaDA.</p>
-        <p><a href="https://github.com/OpenSourceRulesz/ollada">Source</a> · <a href="https://github.com/OpenSourceRulesz/ollada/blob/main/docs/FINDINGS.md">Findings</a> · <a href="https://github.com/OpenSourceRulesz/ollada/blob/main/docs/LIBRARY.md">Library</a> · <a href="https://pypi.org/project/ollada/">PyPI</a></p>
-      </footer></Band>
+      <div className="closing">
+        <div className="wrap">
+          <section className="sec rules" aria-labelledby="rules-h">
+            <div className="sec-head"><Squares /><h2 id="rules-h">Ground rules</h2></div>
+            <div className="three">
+              <div><h3>Free and local</h3><p>Runs entirely on your computer. Ollada doesn't track your usage or send your prompts back to us. No paid services. MIT licensed.</p></div>
+              <div><h3>Honest about hardware</h3><p>Dream, DiffCoder and nemotron:8b4bit need a GPU. sdar:1.7b, sdar:4b and nemotron:3b run on a laptop CPU — slower, but no GPU required.</p></div>
+              <div><h3>Our numbers only</h3><p>Vendor benchmarks are never shown as Ollada measurements.</p></div>
+            </div>
+          </section>
+        </div>
+        <section className="wrap final" aria-labelledby="final-h">
+          <svg className="final-mark" width="64" height="60" viewBox="12 24 106 100" fill="#6C6FD8" aria-hidden="true"><circle cx="26" cy="34" r="10" /><circle cx="22" cy="76" r="10" /><circle cx="38" cy="114" r="10" /><circle cx="72" cy="74" r="10" /><circle cx="108" cy="52" r="10" /><circle cx="108" cy="96" r="10" /></svg>
+          <h2 id="final-h">Start with one command.</h2>
+          <div className="hero-act"><Cmd cmd="pip install ollada" /><a className="btn" href="#install">Step-by-step setup</a></div>
+        </section>
+        <footer className="foot">
+          <div className="wrap">
+            <p>Version 0.3.7 — six models verified on named hardware. 0.3.7 ships the Rust front-end: pip install now bundles a single binary, with the same Python workers underneath. Named the way Ollama was: Ollama ← LLaMA, Ollada ← LLaDA.</p>
+            <p className="links">
+              <a href="https://github.com/OpenSourceRulesz/ollada">Source</a>
+              <a href="https://github.com/OpenSourceRulesz/ollada/blob/main/docs/FINDINGS.md">Findings</a>
+              <a href="https://github.com/OpenSourceRulesz/ollada/blob/main/docs/LIBRARY.md">Library</a>
+              <a href="https://pypi.org/project/ollada/">PyPI</a>
+            </p>
+          </div>
+        </footer>
+      </div>
     </div>
   );
 }

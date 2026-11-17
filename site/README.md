@@ -19,8 +19,10 @@ Output: `dist/index.single.html`.
 ## Deploy
 
 From a detached worktree synced to `origin/gh-pages` (never the stale local
-branch): replace only `index.html` with `dist/index.single.html`, commit,
-push `origin HEAD:gh-pages`. Wait ~60s (Pages serves stale cached copies),
+branch): replace only `index.html` with `dist/index.single.html`, and copy
+`dist/og.png` to the gh-pages root as `og.png` (the link-preview image the
+page's `og:image` / `twitter:image` tags point at; it only changes when
+`public/og.png` does), commit, push `origin HEAD:gh-pages`. Wait ~60s (Pages serves stale cached copies),
 then curl-verify the live page is byte-identical to the built file
 (use `curl -sL`: the slash-less URL 301-redirects).
 
