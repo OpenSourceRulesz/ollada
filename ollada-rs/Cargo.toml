@@ -3,7 +3,7 @@ name = "ollada-rs"
 # Kept in sync with the Python package (ollada/__init__.py): maturin
 # merges the two versions with pyproject taking precedence, and the
 # binary's --version prints this, so they must agree.
-version = "0.3.7"
+version = "0.3.8"
 edition = "2021"
 description = "Ollada Rust front-end: read-only shell (list / show / recommend / ps / rm) plus the fit check, worker env management, the model manager speaking the JSON-lines worker protocol, and the axum HTTP server. The Python implementation stays the reference; this crate must match its output."
 license = "MIT"

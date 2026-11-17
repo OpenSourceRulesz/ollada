@@ -116,7 +116,7 @@ working directory, else `./catalog`.
 - **The binary is `ollada`.** It IS the `ollada` command when installed
   from the wheel (maturin refuses a wheel with both console scripts
   and a binary, so the binary takes the command name). `--version`
-  prints `ollada 0.3.7`, matching Python. `pull` shells out to
+  prints `ollada 0.3.8`, matching Python. `pull` shells out to
   `python -m ollada.cli pull` — downloading weights is the Python
   `huggingface-hub` path.
 - **Float formatting.** Rust's `{:?}` matches Python's repr for the

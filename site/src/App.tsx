@@ -361,7 +361,7 @@ function GetStarted() {
             <ol className="cmds">
               {CMDS.cpu.map((c, i) => <li key={c}><span className="lbl">{CMD_LABELS[i]}</span><Cmd cmd={c} /></li>)}
             </ol>
-            <p className="fine">Check first: <code>pip show ollada</code> should say 0.3.7, and <code>ollada list</code> should show six models including sdar:1.7b. At the <code>&gt;&gt;&gt;</code> prompt, ask: What is the capital of France? Answer with exactly one word. Expect Paris. Ctrl-C quits. NVIDIA GPU? Same steps — no extra needed; the first run picks CPU or CUDA torch for you.</p>
+            <p className="fine">Check first: <code>pip show ollada</code> should say 0.3.8, and <code>ollada list</code> should show seven models including sdar:1.7b. At the <code>&gt;&gt;&gt;</code> prompt, ask: What is the capital of France? Answer with exactly one word. Expect Paris. Ctrl-C quits. NVIDIA GPU? Same steps — no extra needed; the first run picks CPU or CUDA torch for you.</p>
           </li>
         </ol>
         <details className="more-d">
@@ -483,7 +483,7 @@ export default function App() {
         </section>
         <footer className="foot">
           <div className="wrap">
-            <p>Version 0.3.7 — six models verified on named hardware. 0.3.7 ships the Rust front-end: pip install now bundles a single binary, with the same Python workers underneath. Named the way Ollama was: Ollama ← LLaMA, Ollada ← LLaDA.</p>
+            <p>Version 0.3.8 — seven models verified on named hardware. 0.3.8 adds the verified nemotron:8b4bit recipe; 0.3.7 shipped the Rust front-end: pip install now bundles a single binary, with the same Python workers underneath. Named the way Ollama was: Ollama ← LLaMA, Ollada ← LLaDA.</p>
             <p className="links">
               <a href="https://github.com/OpenSourceRulesz/ollada">Source</a>
               <a href="https://github.com/OpenSourceRulesz/ollada/blob/main/docs/FINDINGS.md">Findings</a>

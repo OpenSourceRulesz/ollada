@@ -11,7 +11,7 @@
 //!
 //! Usage differences from the Python CLI, all deliberate:
 //! - the binary is named `ollada` (it IS the `ollada` command when
-//!   installed from the wheel); `--version` prints `ollada 0.3.7`;
+//!   installed from the wheel); `--version` prints `ollada 0.3.8`;
 //! - `pull` shells out to `python -m ollada.cli pull` (see
 //!   `commands::cmd_pull`): downloading weights is the Python
 //!   `huggingface-hub` path, and this crate has none of its own;
@@ -24,7 +24,7 @@
 //! - `run` has no live canvas watch or spinner (see `commands.rs`);
 //!   the answer and the `({elapsed:.1f}s)` footer match Python's
 //!   piped output exactly.
-//! - `serve` reports the ollada version (0.3.7, from
+//! - `serve` reports the ollada version (0.3.8, from
 //!   `ollada/__init__.py`) on its API, not the crate version.
 
 mod cache;
