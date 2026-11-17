@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent as RKeyboardEvent } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Tabs, Headline, IconCopy, CMDS, CMD_LABELS, CMD, PROMPT, WORDS, DIFF, wrongTok, fresh, type Sim,
   SHELF, FAMILIES, status, type M, SERVE, CURL, PS, JS, PY, VENV, VENV_PS, detectOs,
@@ -63,123 +63,107 @@ function verdict(hw: string) {
   return <>{lead}: {parts.map(([k, one, many], i) => <span key={k}><strong>{n[k]}</strong> {n[k] === 1 ? one : many}{i < parts.length - 1 ? ", " : "."}</span>)}</>;
 }
 
-/* ---------- the palette: the shelf as a launcher. Search it, move with the
-   arrow keys, Enter copies the pull command. Grouped by what runs on your GPU. ---------- */
-function famName(id: string) { return FAMILIES.find((f) => f.id === id)?.name ?? id; }
-function SearchIcon() {
-  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.2-4.2" /></svg>;
-}
+/* ---------- the shelf: say which GPU you have, then every model is a bar
+   measured against it. Tap a model to open its commands in place. ---------- */
+const GB = 18; /* the bars' scale with no card, or a small one */
+const art = (hw: string) => (hw === "8" ? "an" : "a");
 function Chevron() {
-  return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>;
+  return <svg className="fd-ch" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>;
 }
-function Palette({ hw, setHw }: { hw: string; setHw: (v: string) => void }) {
-  const [q, setQ] = useState("");
-  const [sel, setSel] = useState<string | null>(null);
-  const [copied, setCopied] = useState("");
-  const listRef = useRef<HTMLDivElement>(null);
+function fitNote(m: M, hw: string, tone: string): ReactNode {
+  if (m.listed) return null;
+  if (hw === "cpu") {
+    if (tone === "ok") return "Measured on a laptop CPU. No GPU needed.";
+    if (tone === "warn") return "Runs on a laptop CPU, slower than on a GPU.";
+    return "Needs a GPU. With no GPU, sdar:1.7b, sdar:4b and nemotron:3b run on CPU.";
+  }
+  if (tone === "ok") return `Fits ${art(hw)} ${hw} GB card with at least 1 GB to spare.`;
+  if (tone === "warn") return `Tight on ${art(hw)} ${hw} GB card: under 1 GB to spare.`;
+  if (tone === "bad") return <>Too big for {art(hw)} {hw} GB card. Ollada stops before loading it instead of crashing (<code>--force</code> overrides).</>;
+  return "Only measured on a laptop CPU so far, not on a GPU.";
+}
+function Finder({ hw, setHw }: { hw: string; setHw: (v: string) => void }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const [grown, setGrown] = useState(reduced);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (grown) return;
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") { setGrown(true); return; }
+    const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { setGrown(true); io.disconnect(); } }, { threshold: 0.15 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [grown]);
   const gpu = hw !== "cpu";
-  const tone = (m: M) => (m.listed ? "listed" : status(m, hw)[0]);
-  const titles: [string, string][] = gpu
-    ? [["ok", `Fits your ${hw} GB card`], ["warn", "Tight"], ["bad", "Won’t fit"], ["na", "Only tested on CPU"], ["listed", "Listed for context"]]
-    : [["ok", "Runs on CPU"], ["warn", "Runs, slowly"], ["bad", "Needs a GPU"], ["listed", "Listed for context"]];
-  const ql = q.trim().toLowerCase();
-  const hits = SHELF.filter((m) => !ql || `${m.n} ${m.use} ${famName(m.fam)}`.toLowerCase().includes(ql));
-  const groups = titles
-    .map(([k, title]) => ({ k, title, items: hits.filter((m) => tone(m) === k).sort((a, b) => a.peak - b.peak) }))
-    .filter((g) => g.items.length);
-  const flat = groups.flatMap((g) => g.items);
-  const cur = flat.find((m) => m.n === sel) ?? flat[0];
-  const show = (m: M) => {
-    setSel(m.n);
-    const el = listRef.current?.querySelector<HTMLElement>(`[data-n="${m.n}"]`);
-    const box = listRef.current;
-    if (el && box) {
-      if (el.offsetTop < box.scrollTop) box.scrollTop = el.offsetTop - 34;
-      else if (el.offsetTop + el.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTop = el.offsetTop + el.offsetHeight - box.clientHeight + 6;
-    }
-  };
-  const move = (d: number) => {
-    if (!flat.length) return;
-    const i = Math.max(0, flat.indexOf(cur));
-    show(flat[(i + d + flat.length) % flat.length]);
-  };
-  const copyPull = (m?: M) => {
-    if (!m || m.listed) return;
-    const cmd = `ollada pull ${m.n}`;
-    navigator.clipboard?.writeText(cmd).then(() => { setCopied(m.n); setTimeout(() => setCopied(""), 1600); }, () => {});
-  };
-  const onKey = (e: RKeyboardEvent) => {
-    if (e.key === "ArrowDown") { e.preventDefault(); move(1); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); move(-1); }
-    else if (e.key === "Enter") { e.preventDefault(); copyPull(cur); }
-    else if (e.key === "Escape") setQ("");
-  };
-  const [ct, ctext] = cur ? (cur.listed ? ["listed", "Not on shelf"] : status(cur, hw)) : ["", ""];
+  const scale = gpu ? Math.max(GB, +hw + 2) : GB;
+  const pct = (v: number) => `${(v / scale) * 100}%`;
+  const rows = [...SHELF].sort((a, b) => Number(!!a.listed) - Number(!!b.listed) || a.peak - b.peak);
   return (
-    <div className="win palette">
-      <div className="pal-search">
-        <SearchIcon />
-        <input
-          type="text" role="combobox" aria-expanded="true" aria-controls="pal-list" aria-autocomplete="list"
-          aria-activedescendant={cur ? `opt-${cur.n.replace(/[:.]/g, "-")}` : undefined}
-          aria-label="Search the shelf" placeholder="Search the shelf…" spellCheck={false}
-          value={q} onChange={(e) => { setQ(e.target.value); setSel(null); }} onKeyDown={onKey}
-        />
-        <label className="pal-gpu">
-          <span>Your GPU</span>
-          <select value={hw} onChange={(e) => setHw(e.target.value)} aria-label="Your GPU memory">
-            {HW.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-          </select>
-          <Chevron />
-        </label>
-      </div>
-      <div className="pal-body">
-        <div className="pal-list" id="pal-list" role="listbox" aria-label="Models on the shelf" ref={listRef}>
-          {groups.map((g) => (
-            <div role="group" aria-label={g.title} key={g.k}>
-              <p className="pal-h" aria-hidden="true">{g.title}<span>{g.items.length}</span></p>
-              {g.items.map((m) => (
-                <div
-                  key={m.n} id={`opt-${m.n.replace(/[:.]/g, "-")}`} data-n={m.n} role="option" aria-selected={m === cur}
-                  className={`pal-row fam-${m.fam} t-${g.k}${m === cur ? " on" : ""}`}
-                  onClick={() => setSel(m.n)} onDoubleClick={() => copyPull(m)}
-                >
-                  <i className="pal-ic" aria-hidden="true" />
-                  <span className="pal-t"><code>{m.n}</code><span>{m.use}</span></span>
-                  {m.isNew && <span className="badge new">New</span>}
-                  <span className="pal-mem">{m.peak} GB</span>
-                </div>
-              ))}
-            </div>
-          ))}
-          {!flat.length && <p className="pal-empty">Nothing on the shelf matches “{q}”.</p>}
+    <div className="win finder" ref={ref}>
+      <div className="fd-ask">
+        <h2 id="gpu-h">What GPU do you have?</h2>
+        <p>Pick its memory. Each bar is a model, measured on real hardware.</p>
+        <div className="gpus" role="group" aria-labelledby="gpu-h">
+          {HW.map((o) => <button key={o.id} aria-pressed={hw === o.id} onClick={() => setHw(o.id)}>{o.label}</button>)}
         </div>
-        {cur && (
-          <div className={`pal-detail fam-${cur.fam}${cur.listed ? " listed" : ""}`} aria-live="polite">
-            <div className="pd-head">
-              <i className="pal-ic big" aria-hidden="true" />
-              <div><code className="pd-name">{cur.n}</code><p>{famName(cur.fam)} · {cur.use}</p></div>
-            </div>
-            <p className={`badge st-${ct}`}><i aria-hidden="true" />{ctext}{gpu && ["ok", "warn", "bad"].includes(ct) && ` on a${hw === "8" ? "n" : ""} ${hw} GB card`}</p>
-            <dl className="pd-meta">
-              <div><dt>Peak memory</dt><dd>{cur.mem}</dd></div>
-              <div><dt>Speed</dt><dd>{cur.spd}</dd></div>
-              <div><dt>Measured on</dt><dd>{cur.on}</dd></div>
-              <div><dt>Run notes</dt><dd>{cur.date}</dd></div>
-            </dl>
-            {cur.listed
-              ? <p className="pd-off">Listed for context only. It isn’t on the shelf, so there’s no pull command.</p>
-              : <div className="pd-cmds"><Cmd cmd={`ollada pull ${cur.n}`} /><Cmd cmd={`ollada run ${cur.n}`} /></div>}
-          </div>
-        )}
+        <details className="unsure">
+          <summary>Not sure how much memory it has?</summary>
+          <p>On Windows, open Task Manager, go to Performance, pick your GPU and read “Dedicated GPU memory”. On an NVIDIA card, <code>nvidia-smi</code> shows it too.</p>
+        </details>
       </div>
-      <div className="pal-foot">
-        <span className="pal-sum">{verdict(hw)}</span>
-        <span className="pal-keys" aria-hidden="true">
-          <span><kbd>↑</kbd><kbd>↓</kbd> Move</span>
-          <span className="pk-copy">{cur && copied === cur.n ? "Copied" : "Copy pull"} <kbd>↵</kbd></span>
-        </span>
+      <div className="fd-sum">
+        <p aria-live="polite">{verdict(hw)}</p>
+        <p className="fd-tip">Tap a model for its commands.</p>
       </div>
+      <div className="fd-grid fd-scale" aria-hidden="true">
+        <span className="fd-track">{gpu && <span className={`fd-cardlabel${+hw / scale > 0.6 ? " end" : ""}`} style={{ left: pct(+hw) }}>your {hw} GB card</span>}</span>
+      </div>
+      <ul className="fd-list" aria-label="Models, smallest first">
+        {rows.map((m, i) => {
+          const [tone, text] = m.listed ? ["listed", "Not on shelf"] : status(m, hw);
+          /* solid = runs; hatched = too big for this card; faded = not for this machine; dashed = not on the shelf */
+          const look = tone === "listed" ? "listed" : tone === "bad" ? (gpu ? "over" : "faded") : tone === "na" ? "faded" : "solid";
+          const isOpen = open === m.n;
+          const id = `m-${m.n.replace(/[:.]/g, "-")}`;
+          const note = fitNote(m, hw, tone);
+          return (
+            <li key={m.n} className={`fd-row fam-${m.fam} ${look}${isOpen ? " open" : ""}`}>
+              <button className="fd-grid fd-hit" aria-expanded={isOpen} aria-controls={id} onClick={() => setOpen(isOpen ? null : m.n)}>
+                <span className="fd-hd">
+                  <span className="fd-nm"><code>{m.n}</code>{m.isNew && <span className="tag">New</span>}<small>{m.use}</small></span>
+                  <span className={`fd-st st-${tone}`}><i aria-hidden="true" />{text}</span>
+                </span>
+                <span className="fd-track" aria-hidden="true">
+                  <span className="fd-bar" style={{ width: grown ? pct(m.peak) : "0%", transitionDelay: grown ? `${i * 40}ms` : "0ms" }} />
+                  {gpu && <span className="fd-line" style={{ left: pct(+hw) }} />}
+                </span>
+                <span className="fd-gb">{m.peak} GB</span>
+                <Chevron />
+              </button>
+              <div className="fd-panel" id={id} role="region" aria-label={m.n} inert={!isOpen}>
+                <div className="fd-in">
+                  <div className="fd-body">
+                    <div className="fd-info">
+                      {note && <p className="fd-note"><i className={`st-${tone}`} aria-hidden="true" /><span>{note}</span></p>}
+                      <dl className="fd-meta">
+                        <div><dt>Good for</dt><dd>{m.use}</dd></div>
+                        <div><dt>Speed</dt><dd>{m.spd === "—" ? "Not recorded" : m.spd}</dd></div>
+                        <div><dt>Memory</dt><dd>{m.mem}</dd></div>
+                        <div><dt>Measured on</dt><dd>{m.on}</dd></div>
+                      </dl>
+                    </div>
+                    {m.listed
+                      ? <p className="fd-off">Listed for context only. It isn’t on the shelf and isn’t verified, so there’s no pull command.</p>
+                      : <div className="fd-cmds"><p>Download it, then run it:</p><Cmd cmd={`ollada pull ${m.n}`} /><Cmd cmd={`ollada run ${m.n}`} /></div>}
+                  </div>
+                  <details className="fd-how"><summary>How we measured this</summary><p>{m.date}</p></details>
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="fd-foot">Bar length is peak memory as measured; for nemotron:3b it’s the weights size.</p>
     </div>
   );
 }
@@ -454,8 +438,8 @@ export default function App() {
             <p className="then">Needs Python 3.10 or newer.</p>
           </div>
           <div className="wrap stage" id="shelf">
-            <Palette hw={hw} setHw={setHw} />
-            <p className="fine pal-fine">Seven models in four families, each run through Ollada’s own code on the hardware listed. Fit is a simplified estimate (fits with 1 GB to spare, tight under that); <code>ollada recommend</code> uses the recorded measurements. The 4-bit variants were measured on an A100 (Colab) with desktop verification still pending; nemotron:8b6bit is listed for context only.</p>
+            <Finder hw={hw} setHw={setHw} />
+            <p className="fine fd-fine">Seven models in four families, each run through Ollada’s own code on the hardware listed. Fit is a simplified estimate (fits with 1 GB to spare, tight under that); <code>ollada recommend</code> uses the recorded measurements. The 4-bit variants were measured on an A100 (Colab) with desktop verification still pending; nemotron:8b6bit is listed for context only.</p>
             <Detail hw={hw} setHw={setHw} />
           </div>
         </section>
