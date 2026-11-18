@@ -103,6 +103,45 @@ def test_parse_length_command():
         _parse_length_command("/length -5")
 
 
+def test_parse_set_item_coerces_types():
+    from ollada.cli import _parse_set_item
+
+    assert _parse_set_item("steps=64") == ("steps", 64)
+    assert _parse_set_item("confidence_threshold=0.85") == (
+        "confidence_threshold",
+        0.85,
+    )
+    assert _parse_set_item("alg=maskgit_plus") == ("alg", "maskgit_plus")
+    assert _parse_set_item("threshold=None") == ("threshold", None)
+    assert _parse_set_item("force=true") == ("force", True)
+    assert _parse_set_item("force=False") == ("force", False)
+    assert _parse_set_item("mode=linear_spec") == ("mode", "linear_spec")
+
+
+def test_parse_set_item_rejects_malformed():
+    import pytest
+
+    from ollada.cli import _parse_set_item
+
+    with pytest.raises(ValueError):
+        _parse_set_item("steps")
+    with pytest.raises(ValueError):
+        _parse_set_item("=64")
+    with pytest.raises(ValueError):
+        _parse_set_item("")
+
+
+def test_run_parser_accepts_repeatable_set():
+    from ollada.cli import build_parser
+
+    args = build_parser().parse_args(
+        ["run", "dream:7b", "--set", "alg=maskgit_plus", "--set", "steps=64"]
+    )
+    assert args.set == ["alg=maskgit_plus", "steps=64"]
+    assert args.length is None
+    assert args.force is False
+
+
 def test_canvas_watch_draws_frames_and_finishes_clean():
     from ollada.cli import _CanvasWatch
 

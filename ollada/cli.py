@@ -43,6 +43,41 @@ def _parse_length_command(text: str) -> int | None:
     return value
 
 
+def _parse_set_item(text: str) -> tuple[str, object]:
+    """Parse one `--set KEY=VALUE` item for `ollada run`.
+
+    The value is coerced so sampler knobs arrive with the type the
+    adapter expects: "None"/"null" -> None, "true"/"false" -> bool,
+    then int, then float, else the raw string. Raises ValueError on
+    a missing "=" or an empty key — a bad override must fail here,
+    not silently pass a string into the model.
+    """
+    if "=" not in text:
+        raise ValueError(f"--set needs KEY=VALUE, got {text!r}")
+    key, _, raw = text.partition("=")
+    key = key.strip()
+    if not key:
+        raise ValueError(f"--set needs KEY=VALUE, got {text!r}")
+    value: object = raw.strip()
+    if isinstance(value, str):
+        lowered = value.lower()
+        if lowered in ("none", "null"):
+            value = None
+        elif lowered == "true":
+            value = True
+        elif lowered == "false":
+            value = False
+        else:
+            try:
+                value = int(value)
+            except ValueError:
+                try:
+                    value = float(value)
+                except ValueError:
+                    pass
+    return key, value
+
+
 class _Thinking:
     """A live "working… Ns" line on stderr while a blocking call runs.
 
@@ -339,6 +374,11 @@ def _cmd_run(args) -> int:
     if args.length is not None and args.length < 1:
         print("length must be a positive number of tokens", file=sys.stderr)
         return 2
+    try:
+        set_overrides = dict(_parse_set_item(item) for item in (args.set or []))
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     manager = ModelManager()
     # The length lever: a diffusion canvas is sized BEFORE generation,
     # and its cost scales with the size — small canvas for quick asks,
@@ -346,7 +386,10 @@ def _cmd_run(args) -> int:
     session_length = args.length
 
     def _overrides() -> dict | None:
-        return {"gen_length": session_length} if session_length else None
+        overrides = dict(set_overrides)
+        if session_length is not None:
+            overrides["gen_length"] = session_length
+        return overrides or None
 
     # Watch is the default on an interactive terminal: the live
     # canvas is the diffusion effect, and the single-line renderer
@@ -525,6 +568,15 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="N",
         help="canvas size in tokens (default: the recipe's gen_length)",
+    )
+    p.add_argument(
+        "--set",
+        action="append",
+        default=None,
+        metavar="KEY=VALUE",
+        help="override one sampler knob for this run only, e.g. "
+        "--set steps=64 --set alg=maskgit_plus (repeatable; the recipe "
+        "default is untouched)",
     )
     p.set_defaults(fn=_cmd_run)
 

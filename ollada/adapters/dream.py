@@ -19,6 +19,16 @@ from ollada.adapters.base import BaseAdapter, GenResult, quantization_config
 
 _DTYPES = {"float16": torch.float16, "bfloat16": torch.bfloat16}
 
+# Token-selection rules in Dream's upstream diffusion_generate
+# (generation_utils.py in Dream-org/Dream-v0-Instruct-7B). "origin" is
+# ollada's default: random transfer on a linear schedule. The others
+# rank masked tokens by confidence and transfer the most confident
+# first — the confidence-aware parallel decoding half of Fast-dLLM
+# (arXiv:2505.22618), already in the weights' own code; no cache
+# change, no new weights. Upstream raises RuntimeError mid-generation
+# on an unknown alg, so ollada validates up front instead.
+_DREAM_ALGS = ("origin", "maskgit_plus", "topk_margin", "entropy")
+
 
 class DreamAdapter(BaseAdapter):
     family = "dream"
@@ -43,6 +53,14 @@ class DreamAdapter(BaseAdapter):
     def chat(self, messages, overrides=None):
         self._require_loaded()
         params = self._params(overrides)
+        alg = str(params.get("alg", "origin"))
+        if alg not in _DREAM_ALGS:
+            from ollada.adapters.base import AdapterError
+
+            raise AdapterError(
+                f"unknown Dream alg {alg!r} (upstream diffusion_generate "
+                f"supports: {', '.join(_DREAM_ALGS)})"
+            )
         input_ids = self._prompt_ids(messages).to(self.model.device)
         started = time.time()
         out = self.model.diffusion_generate(
@@ -51,8 +69,8 @@ class DreamAdapter(BaseAdapter):
             steps=int(params.get("steps", 32)),
             temperature=float(params.get("temperature", 0.2)),
             top_p=float(params.get("top_p", 0.95)),
-            alg="origin",
-            alg_temp=0.0,
+            alg=alg,
+            alg_temp=float(params.get("alg_temp", 0.0)),
             mask_id=self.model.config.mask_token_id,
         )
         ids = out.sequences if hasattr(out, "sequences") else out
