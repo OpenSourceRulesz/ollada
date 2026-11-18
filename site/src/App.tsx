@@ -439,7 +439,7 @@ export default function App() {
           </div>
           <div className="wrap stage" id="shelf">
             <Finder hw={hw} setHw={setHw} />
-            <p className="fine fd-fine">Seven models in four families, each run through Ollada’s own code on the hardware listed. Fit is a simplified estimate (fits with 1 GB to spare, tight under that); <code>ollada recommend</code> uses the recorded measurements. The 4-bit variants were measured on an A100 (Colab) with desktop verification still pending; nemotron:8b6bit is listed for context only.</p>
+            <p className="fine fd-fine">Seven models in four families, each run through Ollada’s own code on the hardware listed. Fit is a simplified estimate (fits with 1 GB to spare, tight under that); <code>ollada recommend</code> uses the recorded measurements. The 4-bit variants were measured on an A100 (Colab) with desktop verification still pending.</p>
             <Detail hw={hw} setHw={setHw} />
           </div>
         </section>

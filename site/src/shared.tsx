@@ -154,7 +154,6 @@ export const SHELF: M[] = [
   { n: "sdar:1.7b", use: "The CPU pick", on: "Intel Core Ultra 7 365 laptop, 32 GB, Windows 11", date: "2026-10-23 · CPU only", mem: "3.9 GB RAM", peak: 3.9, spd: "~6.1 tok/s", kind: "cpu", fam: "sdar" },
   { n: "nemotron:3b", use: "NVIDIA tri-mode", on: "Desktop RTX 5060 Ti (15.9 GB), Windows 11 · also laptop CPU", date: "2026-11-01 · desktop GPU: fixed set 3/3 (Paris, train 90 km/h, fib correct; no VRAM peak recorded) · laptop CPU 2026-10-26: Paris 17.9s, train 90 km/h ~60s, fib 19.0s · mini code eval 11/12", mem: "7.7 GB weights", peak: 7.66, spd: "—", kind: "both", fam: "nemotron" },
   { n: "nemotron:8b4bit", use: "Chat, fits 8 GB cards", on: "NVIDIA A100-SXM4-80GB (Colab)", date: "2026-11-16 · fixed set 3/3 — train 90 km/h 32.8s, Paris 21.4s, fib 22.1s · desktop 5060 Ti verification still pending", mem: "6.18 GB VRAM", peak: 6.18, spd: "—", kind: "gpu", fam: "nemotron", isNew: true },
-  { n: "nemotron:8b6bit", use: "6-bit (HQQ) test, not on the shelf", on: "Not verified for the shelf", date: "2026-11-16 test run on an A100-SXM4-40GB (Colab): fixed set 3/3 (train 90 km/h 56.3s, Paris 33.7s, fib 37.3s), but peak 16.41 GB, so it doesn’t fit a 16 GB card, and it ran slower than the 4-bit variant", mem: "16.41 GB VRAM", peak: 16.41, spd: "—", kind: "gpu", fam: "nemotron", listed: true },
 ];
 export const FAMILIES: { id: string; name: string }[] = [
   { id: "diffcoder", name: "DiffCoder" },
